@@ -4,7 +4,7 @@
 data/
 
 # generated output
-output/tiles/
+output/
 *.npy
 
 # task brief
@@ -13,3 +13,6 @@ tech-task-flypix-ai.pdf
 # python
 __pycache__/
 .venv/
+
+# pytest
+.pytest_cache/
