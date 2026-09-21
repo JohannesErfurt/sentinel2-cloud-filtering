@@ -1,0 +1,15 @@
+# raw Sentinel-2 product and downloads
+*.SAFE/
+*.SAFE.zip
+data/
+
+# generated output
+output/tiles/
+*.npy
+
+# task brief
+tech-task-flypix-ai.pdf
+
+# python
+__pycache__/
+.venv/

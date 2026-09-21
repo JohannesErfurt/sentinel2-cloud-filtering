@@ -1,0 +1,19 @@
+# Runtime dependencies for the Sentinel-2 cloud-filtering pipeline.
+#
+# Target interpreter: Python 3.11
+#   py -3.11 -m venv .venv
+#
+# These are the exact versions exercised by scripts/smoke_test.py (10/10 checks
+# passed on Python 3.11.0). Transitive dependencies are left to pip; the ones that
+# matter for reproducibility are lightgbm 4.7.0 (via s2cloudless) and sentinelhub 3.12.0.
+numpy==2.4.6
+scipy==1.17.1
+matplotlib==3.11.2
+# Headless build only. opencv-python and opencv-python-headless both provide the
+# "cv2" module and shadow each other, and s2cloudless depends on the headless one.
+opencv-python-headless==5.0.0.93
+rasterio==1.4.4
+pyproj==3.7.2
+shapely==2.1.2
+s2cloudless==1.7.3
+pytest==9.1.1
