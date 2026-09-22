@@ -31,12 +31,22 @@ def peak_memory_mb() -> float | None:
                     ("PeakPagefileUsage", ctypes.c_size_t),
                 ]
 
+            kernel32 = ctypes.windll.kernel32
+            psapi = ctypes.windll.psapi
+            # Without explicit argtypes/restype, ctypes assumes plain c_int for
+            # the HANDLE arguments. That truncates the pointer on 64-bit Python
+            # and GetProcessMemoryInfo then fails (returns 0) without raising --
+            # it looks like "no memory info available" instead of a bug.
+            kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+            psapi.GetProcessMemoryInfo.argtypes = [
+                wintypes.HANDLE, ctypes.POINTER(_Counters), wintypes.DWORD,
+            ]
+            psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+
             counters = _Counters()
             counters.cb = ctypes.sizeof(_Counters)
-            handle = ctypes.windll.kernel32.GetCurrentProcess()
-            if ctypes.windll.psapi.GetProcessMemoryInfo(
-                handle, ctypes.byref(counters), counters.cb
-            ):
+            handle = kernel32.GetCurrentProcess()
+            if psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
                 return counters.PeakWorkingSetSize / (1024.0 * 1024.0)
         except Exception:
             return None

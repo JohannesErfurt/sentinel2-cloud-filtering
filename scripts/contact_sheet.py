@@ -52,13 +52,26 @@ def _load_tile_mask(run_dir, row, col):
     return None if image is None else image > 127
 
 
-def _outline(axis, mask, colour, label=None):
-    """Draw a mask as contour lines so the imagery underneath stays visible."""
+def _outline(axis, mask, colour):
+    """Draw a mask as contour lines so the imagery underneath stays visible.
+
+    Silently does nothing on an empty mask (a genuinely clear tile) -- which is
+    exactly why the legend must not depend on any one axis having drawn
+    something: the first named tile (11,2) is the clear one.
+    """
     if mask is None or not mask.any():
         return
     axis.contour(mask.astype(float), levels=[0.5], colors=[colour], linewidths=0.7)
-    if label:
-        axis.plot([], [], color=colour, linewidth=1.5, label=label)
+
+
+def _legend_handles(names):
+    """Proxy artists for the legend, independent of which axis drew a mask."""
+    from matplotlib.lines import Line2D
+
+    return [
+        Line2D([], [], color=OUTLINE_COLOURS[i % len(OUTLINE_COLOURS)], linewidth=1.5, label=name)
+        for i, name in enumerate(names)
+    ]
 
 
 def sheet_tiles(meta, runs, tiles, out_path):
@@ -71,17 +84,12 @@ def sheet_tiles(meta, runs, tiles, out_path):
         rgb = read_tci(meta, tile_window(row, col))
         axis.imshow(rgb)
         for index, run_dir in enumerate(runs):
-            _outline(
-                axis,
-                _load_tile_mask(run_dir, row, col),
-                OUTLINE_COLOURS[index % len(OUTLINE_COLOURS)],
-                names[index],
-            )
+            _outline(axis, _load_tile_mask(run_dir, row, col), OUTLINE_COLOURS[index % len(OUTLINE_COLOURS)])
         axis.set_title("tile %d,%d\n%s" % (row, col, note), fontsize=9)
         axis.set_xticks([])
         axis.set_yticks([])
     if runs:
-        axes[0].legend(loc="lower left", fontsize=7, framealpha=0.8)
+        axes[0].legend(handles=_legend_handles(names), loc="lower left", fontsize=7, framealpha=0.8)
     figure.tight_layout()
     figure.savefig(out_path, bbox_inches="tight")
     plt.close(figure)

@@ -290,7 +290,7 @@ and do not compare numbers produced with different kernels.
 > Caution: on a `uint8` mask, `cv2.INTER_LINEAR` does **not** produce visible fractions. It rounds
 > back to 0/1 and silently moves edge pixels instead (486 pixels moved in a 100 × 100 test window).
 
-- [ ] **F2 — Resampling utilities** (`pipeline/io.py`)
+- [x] **F2 — Resampling utilities** (`pipeline/io.py`)
   **Done when:**
   - (auto) `upsample_nearest(mask, 6)` equals `np.repeat(np.repeat(mask, 6, 0), 6, 1)` and never
     changes dtype or introduces a value that was not in the input.
@@ -554,27 +554,27 @@ then cut exact 549-pixel tiles. Cutting at 60 m would put tile edges half-way th
 
 ### 2.2 Tasks
 
-- [ ] **B1.1 — Parse the scene metadata**
+- [x] **B1.1 — Parse the scene metadata**
   **Done when:**
   - (auto) `scene_metadata.json` contains every constant in the §0.2 table (product, baseline, sensing
     time, CRS, upper-left corner, offset, quantification value, cloud and snow percentages, sun
     angles, footprint), each read from the XML.
   - (auto) Every value equals the §0.2 table.
 
-- [ ] **B1.2 — Load `MSK_CLASSI_B00.jp2` and check it**
+- [x] **B1.2 — Load `MSK_CLASSI_B00.jp2` and check it**
   **Done when:**
   - (auto) Three boolean arrays of shape 1830 × 1830 are returned as `opaque`, `cirrus`, `snow`.
   - (auto) `(opaque | cirrus).mean() * 100` equals `Cloud_Coverage_Assessment` to 4 decimals
     (20.9537); `opaque & cirrus` is empty; `snow` is empty.
   - (auto) The loader **raises** if the channels are swapped. A test feeds it a swapped mask.
 
-- [ ] **B1.3 — Produce the 10 m mask** *(R2, as a baseline)*
+- [x] **B1.3 — Produce the 10 m mask** *(R2, as a baseline)*
   **Done when:**
   - (auto) The 10 m mask equals `np.repeat(np.repeat(cloud, 6, 0), 6, 1)`, is `bool`, and holds no
     interpolated value.
   - (auto) Reassembling the 400 tile masks gives back the full 10 m mask exactly.
 
-- [ ] **B1.4 — Full run and reference figures**
+- [x] **B1.4 — Full run and reference figures**
   **Done when:**
   - (auto) `--detector esa` produces all five outputs and passes CK1–CK8.
   - (auto) **107 tiles invalid, 293 valid**; mean of the 400 percentages **20.9537 % ± 0.0005**;
@@ -586,7 +586,7 @@ then cut exact 549-pixel tiles. Cutting at 60 m would put tile edges half-way th
   - (auto) The scene percentage agrees between `MTD_MSIL1C.xml`, `MTD_TL.xml`, the mask and the mean
     of the CSV.
 
-- [ ] **B1.5 — Write down the reference's limits**
+- [x] **B1.5 — Write down the reference's limits**
   **Done when:**
   - (manual) `output/comparison/reference_notes.md` states the limits with numbers: 60 m, binary, no
     shadow class, no probabilities, and tile 12,19 flagged at 16.2 % although the veil visibly covers
