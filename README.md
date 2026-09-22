@@ -2,6 +2,8 @@
 
 Repository: https://github.com/JohannesErfurt/sentinel2-cloud-filtering
 
+## How I approached the task
+
 Hi FlyPix AI team,
 
 Thank you for giving me this task. I have to admit that it took me more than the estimated five hours, as I got a little lost in exploring the topic of multispectral data. However, I found it really interesting and learned a lot in the process!
@@ -50,6 +52,8 @@ In the end, I decided to solve the task using all three approaches:
 
 This allowed me not only to complete the task, but also to explore the underlying multispectral data and compare different approaches to the problem.
 
+The ZIP file contains the results of my own rule-based classifier (the threshold backend). I chose the thresholds T_bright = 0.18, T_ndsi = −0.20 and T_cirrus = 0.005 by looking at four characteristic tiles (clear, moderate cloud, heavy cloud and a thin cirrus veil) under several settings (comparison/thresholds.jpg). With T_bright = 0.18 the classifier still catches most of the visible haze on the veiled tile, while lower values start flagging villages and roads on the clear tile as cloud. T_ndsi = −0.20 keeps vegetation from being classified as cloud, and T_cirrus = 0.005 lies just above the clear-sky level of the cirrus band. I deliberately did not tune the thresholds to match the ESA mask, as I am not sure if this can be treated as ground truth. 
+
 ---
 
 ## Technical README
@@ -63,9 +67,7 @@ against the real product before it was ticked off. The 16 visual-audit verdicts 
 
 ### Install
 
-Use Python 3.11 in a virtual environment — the `py` launcher on Windows also offers 3.8, 3.10 and
-3.14, and a bare venv silently inherits whichever interpreter created it (3.14 by default here), so
-the `-3.11` flag matters:
+Use Python 3.11 in a virtual environment 
 
 ```bash
 py -3.11 -m venv .venv
@@ -74,29 +76,15 @@ source .venv/Scripts/activate    # Git Bash
 pip install -r requirements.txt
 ```
 
-**Known local gotcha:** `pip install` can fail with `OSError: [WinError 53]` (network path not
-found). The cause isn't this project — a stale entry on the *user* `PATH` points at an offline
-network drive and breaks pip during dependency resolution. Fix it permanently by removing or
-reconnecting that PATH entry, or drop it for one session without touching the stored PATH:
-
-```powershell
-$env:PATH = (($env:PATH -split ';') | Where-Object { $_ -and $_ -notlike 'Z:*' }) -join ';'
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-Install `opencv-python-headless`, not `opencv-python` — both provide the `cv2` module and shadow
-each other, and `s2cloudless` requires the headless build (already pinned in `requirements.txt`).
-
-**The input product is not in this repository.** The 801 MB `.SAFE` folder
-(`S2C_MSIL1C_20251002T101851_N0511_R065_T32UPV_20251002T143120.SAFE`) exceeds GitHub's 100 MB
-per-file limit on five of its band files and is excluded via `.gitignore`. Every command below takes
-its location as `--safe-dir <path to the .SAFE folder>`.
+**The input product (the data) is not in this repository.** 
 
 Verify the environment against the real product before anything else:
 
 ```bash
 python scripts/smoke_test.py --safe-dir <path to the .SAFE folder>
 ```
+
+This runs 10 checks against the .SAFE dataset. If all pass, installation worked and the pipeline commands will run. 
 
 ### Running the pipeline
 
@@ -108,16 +96,8 @@ python -m pipeline.run --safe-dir <path> --detector threshold    --out output/th
 python -m pipeline.run --safe-dir <path> --detector s2cloudless  --out output/s2cloudless
 ```
 
-Each run writes `tiles/*.jpg` (+ `.jgw`/`.prj`), `report.csv`, `tile_stats.csv`, `cloud_mask.geojson`
-and `run_summary.json` into its `--out` folder. The deliverable ZIP leaves out the `.jgw`/`.prj`
-files and `tile_stats.csv` (for the shipped run it only repeats `report.csv`); check an unzipped
-copy with `--no-world-files`.
-
-Validate a run's structure and content:
-
-```bash
-python scripts/check_deliverables.py --out output/threshold --safe-dir <path>
-```
+Each run writes `tiles/` (one JPEG per valid tile, nothing else), `report.csv`,
+`cloud_mask.geojson` and `run_summary.json` into its `--out` folder.
 
 Build the contact sheets used to inspect results without an interactive viewer (each run needs
 `--save-tile-masks` for `--tiles` and `--scene`):
@@ -137,23 +117,39 @@ They are written to `output/comparison/` as PNG. The ZIP carries the same three 
 | `comparison/tiles.jpg` | The four named tiles with all three detectors' mask outlines (ESA red, threshold cyan, s2cloudless yellow). |
 | `comparison/thresholds.jpg` | The four named tiles under five threshold settings for the `threshold` detector, with the shipped row (0.18) marked **SHIPPED**, plus each tile's cloud %. |
 
-Compare all three detectors and re-run the audit/decision:
+
+### Viewers for inspecting the masks
+
+Three viewers show a cloud mask over the true-colour scene, with the 20×20 tile grid, zoom and pan,
+and each tile's cloud % and verdict on hover. Each command writes one self-contained HTML file; open
+it in any browser (no server or internet connection needed).
+
+**ESA mask** — ESA's own classification mask, with its opaque-cloud, cirrus and snow layers:
 
 ```bash
-python -m pipeline.compare --runs output/esa output/threshold output/s2cloudless --audit-verdicts audit/verdicts.csv
-python scripts/decide.py --runs output/esa output/threshold output/s2cloudless --audit-verdicts audit/verdicts.csv
+python -m pipeline.view_mask --safe-dir <path> --run output/esa --out output/comparison/esa_mask_viewer.html
 ```
 
-Two exception viewers exist beyond the spec's own no-interactive-viewer scope decision, built on
-request to manually sanity-check the two backends that don't ship an official mask: `pipeline/view_mask.py`
-(a static ESA-mask viewer) and `pipeline/view_thresholds.py` (a live-slider threshold viewer).
-A third, `pipeline/view_s2cloudless.py`, does the same for the model: one slider for the
-probability threshold, the mask and per-tile verdicts recomputed live, and two curves showing how the
-invalid-tile count and scene cloud % move with the threshold:
+**Threshold masks** — three sliders for `T_bright`, `T_ndsi` and `T_cirrus`; the mask, tile verdicts
+and invalid-tile count update as you drag. It opens at the values in `config/thresholds.json`:
+
+```bash
+python -m pipeline.view_thresholds --safe-dir <path> --out output/comparison/threshold_viewer.html
+```
+
+**s2cloudless masks** — one slider for the probability threshold, plus two curves showing how the
+invalid-tile count and scene cloud % change with it. It opens at the value in
+`config/s2cloudless.json`:
 
 ```bash
 python -m pipeline.view_s2cloudless --safe-dir <path> --run output/s2cloudless --out output/comparison/s2cloudless_viewer.html
 ```
+
+`--run` is optional for the ESA and s2cloudless viewers. When given, the viewer checks its per-tile
+numbers against that run's `report.csv`, and the s2cloudless viewer reuses the run's saved
+probability map instead of running the model again. The threshold viewer stores its values at 8 bits,
+so its cloud % can differ from a real pipeline run by a few tenths of a point; the other two match
+the pipeline exactly.
 
 ### Results — the spread
 
@@ -286,10 +282,7 @@ come to about 2.5 GB, far too much for the ZIP.
 **Row-major CSV order, no identity columns.** `report.csv`'s 400 data rows are row-major in
 `(row, col)`: row *i* (0-indexed, after the header) is tile `(i // 20, i % 20)`. The CSV itself has no
 tile-id column — row order and the JPEG filenames (`tile_rRR_cCC.jpg`) link a CSV row to its tile,
-and the CSV's lat/lon box says roughly where it is. For exact placement on a map, a pipeline run also
-writes a `.jgw` world file and a `.prj` beside each JPEG (a `.jgw` alone has no CRS, so GIS tools
-misread its UTM metres as degrees without the `.prj`). Those two are left out of the deliverable
-ZIP: RGB training data doesn't need map placement.
+and the CSV's lat/lon box says where it is.
 
 **The 30 % rule.** `valid = (cloud_pct <= 30) AND (nodata_fraction <= 0.5)`, compared on the unrounded
 value — on the 10 m grid no tile is ever exactly 30.0000 %, so `<=` and `<` give identical results in
@@ -360,8 +353,8 @@ since D5 had already settled that `s2cloudless` doesn't ship regardless of this 
 directly.
 
 `cloud_cover_percent` for this backend is the hard-mask fraction (Decision D8) — the same definition
-as every other backend's `report.csv` column — with the mean per-tile cloud *probability* available
-separately in `tile_stats.csv` for anyone who wants the continuous value instead.
+as every other backend's `report.csv` column. The model's per-pixel probability map is saved as
+`cloud_probability_60m.npy` for anyone who wants the continuous value instead.
 
 ### Tile 12,19 — the tile that flips
 
@@ -426,8 +419,8 @@ single illustration in the whole project of why this task has no single right an
   the five configurations above give three different verdicts, so there is no single defensible answer
   to score against.
 - **D8 — What `cloud_cover_percent` means for the model:** the hard-mask fraction, same definition as
-  every other backend, in `report.csv`; the mean per-tile probability is available separately in
-  `tile_stats.csv`.
+  every other backend, in `report.csv`; the per-pixel probability map is in
+  `cloud_probability_60m.npy`.
 
 ### Reproducing this from a fresh clone
 
@@ -444,6 +437,8 @@ python -m pipeline.run --safe-dir <path> --detector s2cloudless --out output/s2c
 python -m pipeline.compare --runs output/esa output/threshold output/s2cloudless --audit-verdicts audit/verdicts.csv
 python scripts/decide.py --runs output/esa output/threshold output/s2cloudless --audit-verdicts audit/verdicts.csv
 ```
+
+`audit/verdicts.csv` is in the GitHub repository, not in the ZIP.
 
 This reproduces every number in this README from the source product and the checked-in
 `audit/verdicts.csv` (the audit's own hand judgements aren't recomputed, only scored).

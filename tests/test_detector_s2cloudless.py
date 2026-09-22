@@ -183,16 +183,6 @@ def test_reassembled_tiles_equal_the_full_10m_mask(product):
 
 
 @pytest.mark.needs_product
-def test_tile_extra_reports_mean_probability_in_range(product):
-    detector = S2CloudlessDetector()
-    detector.tile_mask(product, 12, 19)
-    extra = detector.tile_extra(12, 19)
-    assert "mean_probability" in extra
-    assert 0.0 <= extra["mean_probability"] <= 1.0
-    detector.close()
-
-
-@pytest.mark.needs_product
 def test_a_genuinely_clear_tile_stays_mostly_clear(product):
     """SPEC.md 4.2: on tile 11,2 the model flags 0.45% with library defaults."""
     detector = S2CloudlessDetector(prob_threshold=0.4, average_over=1, dilation_size=1)

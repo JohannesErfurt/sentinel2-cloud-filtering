@@ -41,7 +41,7 @@ CLOUD_THRESHOLD_PERCENT = 30
 MAX_NODATA_FRACTION = 0.5
 
 #: The exact column order the task brief specifies for report.csv (SPEC.md 1.5).
-#: No extra columns are permitted; everything else goes to tile_stats.csv.
+#: No extra columns are permitted.
 REPORT_COLUMNS = [
     "min_latitude",
     "min_longitude",

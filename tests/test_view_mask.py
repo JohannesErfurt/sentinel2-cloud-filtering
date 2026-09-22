@@ -115,7 +115,7 @@ def test_build_viewer_html_cross_checks_against_a_real_run(safe_dir, tmp_path):
     import os
 
     from pipeline.detectors import build as build_detector
-    from pipeline.report import write_report_csv, write_tile_stats_csv
+    from pipeline.report import write_report_csv
     from pipeline.tiling import compute_tile_stats, iter_tiles
     from pipeline.metadata import read_product
     from pipeline.view_mask import build_viewer_html
@@ -131,7 +131,6 @@ def test_build_viewer_html_cross_checks_against_a_real_run(safe_dir, tmp_path):
     run_dir = tmp_path / "esa_run"
     os.makedirs(run_dir)
     write_report_csv(str(run_dir / "report.csv"), stats)
-    write_tile_stats_csv(str(run_dir / "tile_stats.csv"), stats)
 
     build_viewer_html(safe_dir, str(run_dir))  # must not raise
 
@@ -141,7 +140,7 @@ def test_build_viewer_html_catches_a_tampered_run(safe_dir, tmp_path):
     import os
 
     from pipeline.detectors import build as build_detector
-    from pipeline.report import write_report_csv, write_tile_stats_csv
+    from pipeline.report import write_report_csv
     from pipeline.tiling import compute_tile_stats, iter_tiles
     from pipeline.metadata import read_product
     from pipeline.view_mask import build_viewer_html
@@ -157,7 +156,6 @@ def test_build_viewer_html_catches_a_tampered_run(safe_dir, tmp_path):
     run_dir = tmp_path / "esa_run"
     os.makedirs(run_dir)
     write_report_csv(str(run_dir / "report.csv"), stats)
-    write_tile_stats_csv(str(run_dir / "tile_stats.csv"), stats)
 
     text = (run_dir / "report.csv").read_text(encoding="utf8")
     lines = text.splitlines()

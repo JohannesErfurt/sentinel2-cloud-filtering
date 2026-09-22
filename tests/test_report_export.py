@@ -1,4 +1,4 @@
-"""F5, F6, F7 -- the CSV schema, JPEG output with world files, and GeoJSON."""
+"""F5, F6, F7 -- the CSV schema, JPEG output, and GeoJSON."""
 from __future__ import annotations
 
 import json
@@ -12,13 +12,10 @@ from pipeline.constants import GRID, REPORT_COLUMNS, TILE_PIXELS, TILE_PX
 from pipeline.export import (
     build_geojson,
     geojson_utm_area,
-    read_world_file,
     write_geojson,
     write_tile_jpeg,
-    write_world_file,
 )
-from pipeline.report import read_report_csv, write_report_csv, write_tile_stats_csv
-from pipeline.tiling import tile_utm_bounds
+from pipeline.report import read_report_csv, write_report_csv
 from tests.conftest import make_stats
 
 
@@ -80,15 +77,6 @@ def test_writing_twice_gives_identical_bytes(tmp_path, meta):
     assert b"\r\n" not in first.read_bytes(), "line endings must not depend on the platform"
 
 
-def test_tile_stats_carries_identity_and_extras(tmp_path, meta):
-    stats = make_stats(meta, lambda r, c: c, extra_for=lambda r, c: {"mean_probability": 0.25})
-    path = write_tile_stats_csv(str(tmp_path / "tile_stats.csv"), stats)
-    header, rows = read_report_csv(path)
-    assert "tile_row" in header and "tile_col" in header and "nodata_fraction" in header
-    assert "mean_probability" in header
-    assert rows[3]["tile_col"] == "3"
-
-
 # ------------------------------------------------------------------------- F6
 def test_jpeg_round_trips_without_a_channel_swap(tmp_path):
     """A red/blue swap survives every shape check, so compare channel means."""
@@ -114,38 +102,6 @@ def test_jpeg_rejects_the_wrong_dtype_or_shape(tmp_path):
         write_tile_jpeg(str(tmp_path / "a.jpg"), np.zeros((10, 10), np.uint8))
     with pytest.raises(ValueError):
         write_tile_jpeg(str(tmp_path / "b.jpg"), np.zeros((10, 10, 3), np.float32))
-
-
-def test_world_file_places_the_tile_on_the_grid(tmp_path, meta):
-    east_min, _, _, north_max = tile_utm_bounds(meta, 6, 5)
-    path = write_world_file(str(tmp_path / "tile.jgw"), east_min, north_max)
-    x_size, y_size, east, north = read_world_file(path)
-    assert (x_size, y_size) == (10.0, -10.0)
-    # The world file names the centre of the top-left pixel, not its corner.
-    assert east == pytest.approx(east_min + 5.0)
-    assert north == pytest.approx(north_max - 5.0)
-
-
-def test_prj_file_names_the_right_crs(tmp_path, meta):
-    """A .jgw alone has no unit or CRS; the .prj is what stops it being misread.
-
-    Measured directly: without a .prj, QGIS reads a UTM easting like 610985 as
-    610985 degrees of longitude -- meaningless, and it wraps around the globe
-    every few screen pixels once past +/-180.
-    """
-    from pipeline.export import read_prj_epsg, write_prj_file
-
-    path = write_prj_file(str(tmp_path / "tile.prj"), meta.epsg)
-    assert read_prj_epsg(path) == meta.epsg
-
-
-def test_prj_file_is_plain_text_wkt(tmp_path, meta):
-    from pipeline.export import write_prj_file
-
-    path = write_prj_file(str(tmp_path / "tile.prj"), meta.epsg)
-    text = open(path, encoding="utf8").read()
-    assert text.startswith("PROJCS[")
-    assert "UTM" in text or "Transverse_Mercator" in text
 
 
 # ------------------------------------------------------------------------- F7

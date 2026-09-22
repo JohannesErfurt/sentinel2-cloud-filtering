@@ -1,4 +1,4 @@
-"""Deliverable output: JPEG tiles with world files, and GeoJSON masks (F6, F7)."""
+"""Deliverable output: JPEG tiles and GeoJSON masks (F6, F7)."""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,7 @@ import os
 
 import cv2
 import numpy as np
-from pyproj import CRS, Transformer
+from pyproj import Transformer
 from rasterio import features
 from shapely.geometry import mapping, shape
 
@@ -35,68 +35,6 @@ def write_tile_jpeg(path: str, rgb: np.ndarray, quality: int = DEFAULT_JPEG_QUAL
     if not ok:
         raise IOError("cv2 failed to write %s" % path)
     return path
-
-
-def write_world_file(path: str, east_min: float, north_max: float, pixel_size: float = 10.0) -> str:
-    """Write the ``.jgw`` world file that georeferences a tile JPEG.
-
-    ``report.csv`` cannot carry a tile identifier -- the brief fixes its six
-    columns -- so this is what makes the imagery self-locating. The last two
-    lines are the coordinates of the **centre** of the top-left pixel, hence the
-    half-pixel shift.
-    """
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    half = pixel_size / 2.0
-    lines = [
-        "%.10f" % pixel_size,
-        "0.0000000000",
-        "0.0000000000",
-        "%.10f" % -pixel_size,
-        "%.10f" % (east_min + half),
-        "%.10f" % (north_max - half),
-    ]
-    with open(path, "w", encoding="utf8", newline="") as handle:
-        handle.write("\n".join(lines) + "\n")
-    return path
-
-
-def read_world_file(path: str) -> tuple[float, float, float, float]:
-    """Read a world file back as ``(x_size, y_size, east_centre, north_centre)``."""
-    with open(path, encoding="utf8") as handle:
-        values = [float(line) for line in handle if line.strip()]
-    if len(values) != 6:
-        raise ValueError("%s has %d lines, expected 6" % (path, len(values)))
-    return values[0], values[3], values[4], values[5]
-
-
-def write_prj_file(path: str, epsg: int) -> str:
-    """Write the ``.prj`` sidecar naming a tile JPEG's coordinate system.
-
-    A ``.jgw`` world file is numbers only: pixel size and an origin, in
-    whatever units and CRS the author had in mind. Nothing in the file itself
-    says those numbers are UTM 32N metres rather than, say, degrees -- so a
-    GIS package that only sees the JPEG and its ``.jgw`` has to *guess*, and
-    the guess is usually the current project's CRS. Dragging such a tile into
-    a WGS84 project then reads 610985 (an easting in metres) as 610985 degrees
-    of longitude, which is meaningless and wraps around the globe every few
-    screen pixels -- exactly the failure this file exists to prevent.
-
-    ``.prj`` is the standard, universally-read fix (QGIS, ArcGIS, GDAL): a
-    plain-text WKT description of the CRS, read automatically from beside the
-    image with no prompt and no manual "assign CRS" step.
-    """
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    wkt = CRS.from_epsg(epsg).to_wkt("WKT1_ESRI")
-    with open(path, "w", encoding="utf8", newline="") as handle:
-        handle.write(wkt)
-    return path
-
-
-def read_prj_epsg(path: str) -> int | None:
-    """EPSG code of a ``.prj`` file's CRS, or ``None`` if it cannot be resolved."""
-    with open(path, encoding="utf8") as handle:
-        wkt = handle.read()
-    return CRS.from_wkt(wkt).to_epsg()
 
 
 # ------------------------------------------------------------------- GeoJSON
@@ -244,8 +182,6 @@ def geojson_utm_area(collection: dict, epsg: int) -> float:
 __all__ = [
     "DEFAULT_JPEG_QUALITY",
     "write_tile_jpeg",
-    "write_world_file",
-    "read_world_file",
     "mask_to_features",
     "features_to_wgs84",
     "build_geojson",

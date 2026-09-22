@@ -32,14 +32,13 @@ from tests.conftest import make_stats
 
 
 def _write_run(tmp_path, name, meta, detector, cloud_for, with_masks=True):
-    from pipeline.report import write_report_csv, write_tile_stats_csv
+    from pipeline.report import write_report_csv
     from pipeline.tiling import scene_cloud_percent
 
     stats = make_stats(meta, cloud_for)
     out_dir = tmp_path / name
     out_dir.mkdir()
     write_report_csv(str(out_dir / "report.csv"), stats)
-    write_tile_stats_csv(str(out_dir / "tile_stats.csv"), stats)
 
     valid = sum(1 for s in stats if s.valid)
     summary = {

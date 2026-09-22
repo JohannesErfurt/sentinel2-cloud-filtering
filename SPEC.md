@@ -392,7 +392,7 @@ nodata     = (dn == 0)                       # per the product's SPECIAL_VALUE_I
 valid      = (cloud_pct <= 30) and (nodata_fraction <= MAX_NODATA)    # MAX_NODATA default 0.5
 ```
 
-`nodata_fraction` goes in `tile_stats.csv`, not in `report.csv` — the brief fixes that schema.
+`nodata_fraction` is used for the verdict but not written out; `report.csv` has only the six columns the brief fixes.
 
 - [x] **F4 — Tile statistics and the 30 % rule** (`pipeline/tiling.py`) *(R3, R4)*
   **Done when:**
@@ -401,8 +401,7 @@ valid      = (cloud_pct <= 30) and (nodata_fraction <= MAX_NODATA)    # MAX_NODA
     for every count from 0 to 549².
   - (auto) A synthetic tile at 29.97 % is valid, and a test fails if rounding happens before the
     comparison.
-  - (auto) A synthetic all-no-data tile is invalid even though its cloud percentage is 0, and
-    `nodata_fraction` appears in `tile_stats.csv` for all 400 tiles.
+  - (auto) A synthetic all-no-data tile is invalid even though its cloud percentage is 0.
   - (auto) On this product every tile has `nodata_fraction` below 1e-4, so the no-data rule changes
     no verdict here.
 
@@ -418,76 +417,34 @@ min_latitude,min_longitude,max_latitude,max_longitude,cloud_cover_percent,valid
 ```
 
 Rows are **row-major** in `(row, col)`: line *i* + 2 is tile `(i // 20, i % 20)`. The CSV has no
-identity columns, so row order, the JPEG file names and the world files (§1.6) are the only link to a
-tile; document this in the README. Write `cloud_cover_percent` with at least 4 decimals and `valid`
+identity columns, so row order and the JPEG file names are the only link to a tile; document this in
+the README. Write `cloud_cover_percent` with at least 4 decimals and `valid`
 as `True` / `False`.
 
-Everything else — tile row and column, the opaque/cirrus split, mean cloud probability,
-`nodata_fraction`, the per-tile agreement with the reference — goes in a sidecar `tile_stats.csv`
-that carries explicit `tile_row` and `tile_col` columns.
+No sidecar CSV is written: `report.csv` is the only per-tile output (a `tile_stats.csv` sidecar with
+tile ids, `nodata_fraction` and per-detector extras was removed on request, as it repeated
+`report.csv`).
 
 - [x] **F5 — CSV writer** (`pipeline/report.py`) *(R6)*
   **Done when:**
   - (auto) Checks CK2 and CK3 pass (§1.9).
   - (auto) Row order is row-major and the first data row is tile (0,0).
-  - (auto) `tile_stats.csv` has 400 rows and carries `tile_row`, `tile_col` and `nodata_fraction`.
 
-### 1.6 JPEG export and world files
+### 1.6 JPEG export
 
 Write only valid tiles. The source is the 10 m `TCI.jp2`, which is already 8-bit RGB. **`TCI` is
 display-stretched and must never be used for detection, only for output imagery.** Read a window with
 rasterio, convert RGB to BGR for OpenCV, and write at quality 90 (about 61 KB per tile). Name files
-`tile_rRR_cCC.jpg`.
+`tile_rRR_cCC.jpg`. `tiles/` holds these JPEGs and nothing else: `.jgw` world files and `.prj`
+sidecars for GIS placement were written in an earlier version and removed on request, since the tiles
+are RGB training data and `report.csv` already locates each one.
 
-**Write a `.jgw` world file beside each JPEG.** Six lines of plain text:
-
-```
-10.0            # pixel size in x
-0.0
-0.0
--10.0           # pixel size in y
-<east_min + 5>  # UTM easting of the centre of the top-left pixel
-<north_max - 5> # UTM northing of the centre of the top-left pixel
-```
-
-`report.csv` cannot carry a tile identifier — the brief fixes its six columns — so the world file is
-what makes the imagery self-locating.
-
-**A `.jgw` alone is not enough, and this was wrong in an earlier draft of this spec.** A world file is
-six numbers with no unit and no CRS attached — nothing in it says they are UTM 32N metres rather than,
-say, degrees. A GIS package that only has the JPEG and its `.jgw` has to guess a CRS for those numbers,
-and the guess is usually whatever the current project is already in. Dragged into a WGS84 (degree)
-project, `610985` (an easting in metres) is read as `610985°` of longitude, which is meaningless and
-wraps around the globe every few screen pixels — a mouse move of a centimetre swinging the coordinate
-readout by 200°. Measured while writing this spec: exactly this happened on the first real attempt to
-drag a tile into QGIS.
-
-**Write a `.prj` sidecar too, alongside the `.jgw`.** It is the CRS's WKT as plain text
-(`pyproj.CRS.from_epsg(epsg).to_wkt("WKT1_ESRI")`), and QGIS, ArcGIS and GDAL all read it automatically
-from beside an image with no prompt. With it, dragging any tile into QGIS lands it in the right place
-with no manual "assign CRS" step, which is a direct visual proof that the geocoding in F3 is correct.
-
-- [x] **F6 — JPEG and world-file writer** (`pipeline/export.py`) *(R5)*
+- [x] **F6 — JPEG writer** (`pipeline/export.py`) *(R5)*
   **Done when:**
   - (auto) Check CK5 passes.
   - (auto) A test catches a red/blue channel swap (per-channel means of the decoded JPEG match the
     TCI window within 2 grey levels).
-  - (auto) Every JPEG has a matching `.jgw` and `.prj`; the `.jgw`'s easting/northing equals the F3
-    grid for that tile exactly, and the `.prj` names the product's own EPSG code.
-  - (manual) One tile dragged into QGIS lands on the correct part of the scene, with no manual CRS
-    assignment.
-
-  **Status of the manual line: inconclusive, accepted anyway.** The first attempt (tile 11,2, `.jgw`
-  only) failed exactly as §1.6 describes -- coordinates wrapping every few pixels. With the `.prj`
-  added, QGIS still did not place the tile correctly on the user's machine, for a reason neither of us
-  tracked down (candidates: this GDAL/QGIS version not reading a `.prj` sidecar for a bare JPEG the
-  same way it does for other raster formats; a stale cached read of the same path; something else).
-  The `.prj`'s own correctness is not in question -- `read_prj_epsg` round-trips it via `pyproj`, CK5
-  asserts it names the product's EPSG code on every real run, and geojson.io independently confirmed
-  the same coordinate pipeline (transform, EPSG, F3 grid) places a feature over Fürth exactly where
-  expected (F7). Ticked on that basis, with this QGIS-specific gap on record rather than hidden. If it
-  matters later, the next step would be an embedded CRS instead of a sidecar -- e.g. a GeoTIFF tile
-  alongside the JPEG, which every GIS tool reads unambiguously.
+  - (auto) `tiles/` contains only the valid tiles' JPEGs.
 
 ### 1.7 GeoJSON export
 
@@ -525,7 +482,7 @@ python -m pipeline.run --safe-dir <SAFE> --detector {esa,threshold,s2cloudless} 
 | `--save-tile-masks` | write `tile_masks/tile_rRR_cCC.png` for all 400 tiles |
 | `--jpeg-quality` | default 90 |
 
-Outputs, per run, into `--out`: `tiles/` (valid JPEGs plus `.jgw`), `report.csv`, `tile_stats.csv`,
+Outputs, per run, into `--out`: `tiles/` (valid JPEGs only), `report.csv`,
 `cloud_mask.geojson`, `run_summary.json`.
 
 **Tile by tile is the default path.** Reading one 549 × 549 window costs 0.013 s, so all 400 windows
@@ -555,9 +512,9 @@ a bad run fails instead of producing quiet nonsense. CK7 and CK8 run in `check_d
 |---|---|
 | CK1 | **Grid.** 400 tiles, rows and columns 0–19, each a 549 × 549 window at 10 m, covering the 10980² raster exactly once. |
 | CK2 | **CSV schema.** The header is exactly the six columns of §1.5; 400 data rows; no extra columns. |
-| CK3 | **CSV values.** `cloud_cover_percent` is in [0, 100] with at least 4 decimals; `valid` is `True`/`False` and equals the integer 30 % rule combined with the no-data rule on every row. |
+| CK3 | **CSV values.** `cloud_cover_percent` is in [0, 100] with at least 4 decimals; `valid` is `True`/`False`; no row over 30 % is `True` (a row at or under 30 % may be `False` for no-data, which `report.csv` does not carry). |
 | CK4 | **Geography.** Every box has min < max and equals the recomputed four-corner box within 1e-6°; the union of the 400 boxes equals the scene footprint within 1e-4°. |
-| CK5 | **JPEGs.** The files in `tiles/` are exactly the valid rows (`tile_rRR_cCC.jpg` plus `.jgw` and `.prj`); none for invalid tiles; each decodes to 549 × 549 × 3; the `.prj` names the product's own CRS; mean absolute difference to the TCI window is at most 3 grey levels. |
+| CK5 | **JPEGs.** The files in `tiles/` are exactly the valid rows (`tile_rRR_cCC.jpg`, nothing else); none for invalid tiles; each decodes to 549 × 549 × 3; mean absolute difference to the TCI window is at most 3 grey levels. |
 | CK6 | **Consistency.** The mean of the 400 percentages equals the scene cloud percentage in `run_summary.json` within 1e-3; the count of `True` rows equals the number of JPEGs. |
 | CK7 | **GeoJSON.** A valid FeatureCollection in (lon, lat) order, every coordinate inside the footprint, every geometry valid, and total polygon area (in UTM) equal to the mask's pixel area within 1e-6 relative — or 0.5 % if §1.7 simplification was applied. |
 | CK8 | **Determinism.** Running the same detector twice gives a byte-identical `report.csv` and the same JPEG file list. |
@@ -1091,8 +1048,8 @@ optimum and the shipped config's real score, not just whichever is more flatteri
     at 10 m; the mask holds only 0 and 1 (no interpolated probability was thresholded after
     upsampling).
   - (auto) The 400 tile masks reassemble into the full 10 m mask exactly.
-  - (auto) `cloud_cover_percent` is the hard-mask fraction (decision D8); the **mean probability** per
-    tile is written to `tile_stats.csv` so both definitions can be compared.
+  - (auto) `cloud_cover_percent` is the hard-mask fraction (decision D8); the per-pixel probability
+    map is saved as `cloud_probability_60m.npy`.
   - (manual) On the contact sheet the overlay looks right on tiles 11,2 / 6,5 / 5,16 / 12,19.
     *(verified: on the real product, coverage exceeds ESA's on every cloudy named tile, most visibly
     on 12,19; the small-cloud "halos" §4.2 describes are a property of the library's default
@@ -1231,7 +1188,7 @@ The rule was fixed in §0.4, before any of this was measured. Apply it as writte
   - (manual) Which detector ships and why (E3); that the ML bonus is satisfied by B3 either way.
   - (manual) The method: the brightness/NDSI/B10 formulas, why NDSI is used on a snow-free scene, the
     offset and why it matters; the resolution decision (D2); four-corner bounding boxes; row-major CSV
-    order and the `.jgw`/`.prj` files as the link from a JPEG to its place on the ground; the no-data
+    order and the JPEG file names as the link from a CSV row to its tile; the no-data
     rule and that every tile on this product has `nodata_fraction` below 1e-4, so it changes no
     verdict here.
   - (manual) **The threshold choice (B2.2).** The three values from `config/thresholds.json` with
@@ -1252,7 +1209,7 @@ The rule was fixed in §0.4, before any of this was measured. Apply it as writte
     setting, coverage of the visibly-veiled tile 12,19 drops from 82.5 % (library defaults) to
     33.1 %, converging toward ESA's own under-detection of thin cloud instead of correcting it. Which
     definition of `cloud_cover_percent` feeds the 30 % rule for this backend (the hard-mask fraction,
-    decision D8) and where the mean-probability alternative lives (`tile_stats.csv`).
+    decision D8) and where the probability map lives (`cloud_probability_60m.npy`).
   - (manual) The tile 12,19 write-up from §3.5, with its table.
   - (manual) Limitations: no ground truth, ESA is a baseline, no shadow class (D4), one scene, a
     16-tile subjective audit.
@@ -1266,22 +1223,17 @@ The rule was fixed in §0.4, before any of this was measured. Apply it as writte
   regenerate was then left out on request.
   **Done when:**
   - (auto) Exactly **one** ZIP exists, at most 25 MB, containing:
-    - `tiles/` — the chosen detector's valid JPEGs, without their `.jgw`/`.prj` files (left out on
-      request; pipeline runs still write them) *(verified: 317 JPEGs, matching `threshold`'s 83
-      invalid of 400)*
+    - `tiles/` — the chosen detector's valid JPEGs, nothing else *(verified: 317 JPEGs, matching
+      `threshold`'s 83 invalid of 400)*
     - `report.csv` — the chosen detector's report, 400 rows, the six columns of §1.5
-    - `cloud_mask.geojson`, `run_summary.json` (`tile_stats.csv` left out on request: for the
-      shipped `threshold` run it only repeats `report.csv` plus a tile id and an all-zero
-      `nodata_fraction`)
+    - `cloud_mask.geojson`, `run_summary.json`
     - `comparison/` — three contact sheets as JPEG: `scene` (from the shipped `threshold` run),
       `tiles`, `thresholds` (with the shipped 0.18 row). Left out on request, all regenerable: the
       other two detectors' `report.csv` files, `comparison.md`, `decision.md`,
-      `reference_notes.md`, both sweep CSVs and the `s2cloudless_candidates` sheet.
-    - `audit/verdicts.csv` — the visual-audit verdicts, at the repository's own path so the
-      README's compare/decide commands work from the unzipped copy; the one input that cannot be
-      regenerated
+      `reference_notes.md`, both sweep CSVs, the `s2cloudless_candidates` sheet and
+      `audit/verdicts.csv` (the audit verdicts stay in the repository only)
     - `README.md`, `pipeline/`, `scripts/`, `tests/`, `config/`, `requirements.txt`
-  - (auto) `python scripts/check_deliverables.py --out <unzipped copy> --no-world-files` passes the
+  - (auto) `python scripts/check_deliverables.py --out <unzipped copy>` passes the
     structural checks in a temporary folder, with no `.SAFE` present. *(verified: unzipped to a temp folder, 6 passed,
     0 failed, 1 skipped (CK5's TCI comparison, which needs `--safe-dir`) — CK1-CK4, CK6, CK7 all pass
     with no `.SAFE` anywhere near the temp folder)*
@@ -1299,8 +1251,8 @@ pipeline/
   metadata.py      # XML parsing, constants                                   (F1)
   io.py            # band reading, reflectance, resampling                    (F1, F2)
   tiling.py        # 20x20 grid, four-corner boxes, tile stats, 30 % rule     (F3, F4)
-  report.py        # report.csv + tile_stats.csv                              (F5)
-  export.py        # JPEG + .jgw + .prj + GeoJSON                             (F6, F7)
+  report.py        # report.csv                                               (F5)
+  export.py        # JPEG + GeoJSON                                           (F6, F7)
   checks.py        # CK1-CK6 as in-pipeline assertions                        (F9)
   masks.py         # brightness / NDSI / B10 formulas                        (B2.1)
   metrics.py       # precision, recall, F1, IoU on two boolean masks         (shared: B2.2, E1)
@@ -1366,8 +1318,8 @@ Each needs a choice and one sentence of justification in the README.
   (s2cloudless, depending on its own configuration) -- five configurations, three different verdicts
   (§3.5). Decide and state the definition.
 - [ ] **D8 — What `cloud_cover_percent` means for the model:** the hard-mask fraction or the mean
-  probability. Default is the hard-mask fraction in `report.csv`, with the mean probability in
-  `tile_stats.csv`.
+  probability. Default is the hard-mask fraction in `report.csv`; the per-pixel probability map is
+  in `cloud_probability_60m.npy`.
 
 ---
 

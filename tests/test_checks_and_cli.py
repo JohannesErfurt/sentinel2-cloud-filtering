@@ -36,12 +36,25 @@ def test_ck2_catches_a_renamed_column(synthetic_run):
     assert _ids(run_checks(str(synthetic_run), None, ["CK2"]))["CK2"].ok is False
 
 
-def test_ck3_catches_a_flipped_valid_flag(synthetic_run):
+def test_ck3_catches_a_cloudy_tile_marked_valid(synthetic_run):
     path = synthetic_run / "report.csv"
     lines = path.read_text(encoding="utf8").splitlines()
-    lines[1] = lines[1].replace(",True", ",False") if ",True" in lines[1] else lines[1].replace(",False", ",True")
+    assert lines[2].endswith(",False"), "tile 0,1 is cloudy in the synthetic run"
+    lines[2] = lines[2][: -len("False")] + "True"
     path.write_text("\n".join(lines) + "\n", encoding="utf8")
     assert _ids(run_checks(str(synthetic_run), None, ["CK3"]))["CK3"].ok is False
+
+
+def test_ck5_catches_a_clear_tile_marked_invalid_but_still_written(synthetic_run):
+    """CK3 must allow a clear tile to be False (no-data); CK5 then sees its stray JPEG."""
+    path = synthetic_run / "report.csv"
+    lines = path.read_text(encoding="utf8").splitlines()
+    assert lines[1].endswith(",True"), "tile 0,0 is clear in the synthetic run"
+    lines[1] = lines[1][: -len("True")] + "False"
+    path.write_text("\n".join(lines) + "\n", encoding="utf8")
+    results = _ids(run_checks(str(synthetic_run), None, ["CK3", "CK5"]))
+    assert results["CK3"].ok is True
+    assert results["CK5"].ok is False
 
 
 def test_ck3_catches_a_truncated_percentage(synthetic_run):
@@ -62,34 +75,8 @@ def test_ck5_catches_a_deleted_jpeg(synthetic_run):
     assert _ids(run_checks(str(synthetic_run), None, ["CK5"]))["CK5"].ok is False
 
 
-def test_ck5_catches_a_missing_world_file(synthetic_run):
-    world = sorted((synthetic_run / "tiles").glob("*.jgw"))[0]
-    os.remove(world)
-    assert _ids(run_checks(str(synthetic_run), None, ["CK5"]))["CK5"].ok is False
-
-
-def test_ck5_catches_a_missing_prj_file(synthetic_run):
-    """A .jgw alone silently misplaces a tile in any GIS tool -- see SPEC.md 1.6."""
-    prj = sorted((synthetic_run / "tiles").glob("*.prj"))[0]
-    os.remove(prj)
-    assert _ids(run_checks(str(synthetic_run), None, ["CK5"]))["CK5"].ok is False
-
-
-def test_ck5_without_world_files_accepts_jpegs_alone_but_still_counts_them(synthetic_run):
-    for sidecar in list((synthetic_run / "tiles").glob("*.jgw")) + list((synthetic_run / "tiles").glob("*.prj")):
-        os.remove(sidecar)
-    assert _ids(run_checks(str(synthetic_run), None, ["CK5"]))["CK5"].ok is False
-    assert _ids(run_checks(str(synthetic_run), None, ["CK5"], world_files=False))["CK5"].ok is True
-
-    os.remove(sorted((synthetic_run / "tiles").glob("*.jpg"))[0])
-    assert _ids(run_checks(str(synthetic_run), None, ["CK5"], world_files=False))["CK5"].ok is False
-
-
-def test_ck5_catches_a_prj_naming_the_wrong_crs(synthetic_run):
-    from pipeline.export import write_prj_file
-
-    prj = sorted((synthetic_run / "tiles").glob("*.prj"))[0]
-    write_prj_file(str(prj), 4326)  # a real CRS, just not this product's
+def test_ck5_rejects_anything_but_jpegs_in_tiles(synthetic_run):
+    (synthetic_run / "tiles" / "tile_r00_c00.jgw").write_text("10\n0\n0\n-10\n0\n0\n", encoding="utf8")
     assert _ids(run_checks(str(synthetic_run), None, ["CK5"]))["CK5"].ok is False
 
 

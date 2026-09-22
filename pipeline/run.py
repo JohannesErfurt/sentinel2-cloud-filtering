@@ -25,25 +25,11 @@ import numpy as np
 from . import detectors
 from .checks import IN_PIPELINE_CHECKS, CheckFailure, assert_checks
 from .constants import TILE_PIXELS
-from .export import (
-    DEFAULT_JPEG_QUALITY,
-    build_geojson,
-    write_geojson,
-    write_prj_file,
-    write_tile_jpeg,
-    write_world_file,
-)
+from .export import DEFAULT_JPEG_QUALITY, build_geojson, write_geojson, write_tile_jpeg
 from .io import read_nodata_mask, read_tci
 from .metadata import ProductError, read_product
-from .report import write_report_csv, write_tile_stats_csv
-from .tiling import (
-    check_grid,
-    compute_tile_stats,
-    iter_tiles,
-    scene_cloud_percent,
-    tile_utm_bounds,
-    tile_window,
-)
+from .report import write_report_csv
+from .tiling import check_grid, compute_tile_stats, iter_tiles, scene_cloud_percent, tile_window
 from .util import peak_memory_mb
 
 _VERSION_PACKAGES = [
@@ -162,19 +148,12 @@ def run(args: argparse.Namespace) -> dict:
             window = tile_window(row, col)
             cloud = detector.tile_mask(meta, row, col)
             nodata = read_nodata_mask(meta, window=window)
-            item = compute_tile_stats(meta, row, col, cloud, nodata, detector.tile_extra(row, col))
+            item = compute_tile_stats(meta, row, col, cloud, nodata)
             stats.append(item)
 
             if item.valid:
                 rgb = read_tci(meta, window)
                 write_tile_jpeg(os.path.join(tiles_dir, item.name + ".jpg"), rgb, args.jpeg_quality)
-                east_min, _, _, north_max = tile_utm_bounds(meta, row, col)
-                write_world_file(os.path.join(tiles_dir, item.name + ".jgw"), east_min, north_max)
-                # A .jgw alone is numbers with no unit or CRS attached, so a GIS
-                # tool has to guess one -- usually its own project CRS, which
-                # turns UTM metres into nonsense degrees. The .prj sidecar is
-                # what lets a plain drag-and-drop land in the right place.
-                write_prj_file(os.path.join(tiles_dir, item.name + ".prj"), meta.epsg)
                 written += 1
 
             if args.save_tile_masks:
@@ -191,7 +170,6 @@ def run(args: argparse.Namespace) -> dict:
         scene_percent = scene_cloud_percent(stats)
 
         write_report_csv(os.path.join(out_dir, "report.csv"), stats)
-        write_tile_stats_csv(os.path.join(out_dir, "tile_stats.csv"), stats)
 
         geojson_info: dict = {}
         if not args.no_geojson:

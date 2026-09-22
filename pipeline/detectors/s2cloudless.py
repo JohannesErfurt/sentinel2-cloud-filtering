@@ -169,19 +169,6 @@ class S2CloudlessDetector(Detector):
         self._ensure_loaded(meta)
         return self.cut(self._cloud10, row, col)
 
-    def tile_extra(self, row: int, col: int) -> dict:
-        """Mean cloud probability per tile (decision D8): ``cloud_cover_percent``
-        in report.csv is the hard-mask fraction; the soft alternative lives
-        here, in tile_stats.csv, so both definitions can be compared."""
-        if self._prob60 is None:
-            return {}
-        from ..constants import TILE_METRES
-
-        tile_px_60m = TILE_METRES / 60.0  # 91.5
-        y0, y1 = round(row * tile_px_60m), round((row + 1) * tile_px_60m)
-        x0, x1 = round(col * tile_px_60m), round((col + 1) * tile_px_60m)
-        return {"mean_probability": float(self._prob60[y0:y1, x0:x1].mean())}
-
     def scene_layers(self, meta: ProductMetadata) -> tuple[dict[str, np.ndarray], int]:
         """The hard mask at 60 m, for the GeoJSON bonus (SPEC.md 4.6/B3.4)."""
         self._ensure_loaded(meta)

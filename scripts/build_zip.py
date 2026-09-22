@@ -4,11 +4,9 @@
 
 Packs, at the archive root: the chosen detector's ``tiles/`` (the JPEGs only),
 ``report.csv``, ``cloud_mask.geojson`` and ``run_summary.json``; a ``comparison/``
-folder with three contact sheets; ``audit/verdicts.csv``, the visual-audit
-verdicts that decided which detector ships (the one input that cannot be
-regenerated from the code and the product); and the source tree needed to
-reproduce everything else (``README.md``, ``pipeline/``, ``scripts/``, ``tests/``,
-``config/``, ``requirements.txt``). No ``.SAFE`` product, no scratch/working files.
+folder with three contact sheets; and the source tree (``README.md``,
+``pipeline/``, ``scripts/``, ``tests/``, ``config/``, ``requirements.txt``). No
+``.SAFE`` product, no audit verdicts, no scratch/working files.
 
 The contact sheets are stored as JPEG (quality 85) rather than their original
 PNG (a few MB each), which is what keeps the archive under 25 MB without
@@ -44,22 +42,18 @@ def _iter_source_files(root):
             yield os.path.join(dirpath, name)
 
 
-def build(detector_run, comparison_dir, audit_verdicts, out_path):
+def build(detector_run, comparison_dir, out_path):
     os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
     if os.path.exists(out_path):
         os.remove(out_path)
 
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zf:
         # The chosen detector's own deliverables, at the archive root.
-        # tile_stats.csv stays out: for the shipped run it only repeats report.csv.
         for name in ("report.csv", "cloud_mask.geojson", "run_summary.json"):
             src = os.path.join(detector_run, name)
             if not os.path.isfile(src):
                 raise SystemExit("error: missing %s in %s" % (name, detector_run))
             zf.write(src, name)
-        # JPEGs only: the .jgw/.prj world files the pipeline writes next to
-        # them are left out of the deliverable (placement on a map is not
-        # needed for RGB training data; the CSV already locates each tile).
         tiles_dir = os.path.join(detector_run, "tiles")
         for fname in sorted(os.listdir(tiles_dir)):
             if fname.endswith(".jpg"):
@@ -75,9 +69,6 @@ def build(detector_run, comparison_dir, audit_verdicts, out_path):
             if not ok:
                 raise SystemExit("error: could not re-encode %s" % src)
             zf.writestr("comparison/%s.jpg" % os.path.splitext(name)[0], buf.tobytes(), zipfile.ZIP_STORED)
-
-        # Same path as in the repository, so the README's compare/decide commands work unzipped.
-        zf.write(audit_verdicts, "audit/verdicts.csv")
 
         zf.write("README.md", "README.md")
         zf.write("requirements.txt", "requirements.txt")
@@ -98,10 +89,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--detector-run", required=True, help="the shipped detector's output folder")
     parser.add_argument("--comparison-dir", default="output/comparison")
-    parser.add_argument("--audit-verdicts", default="audit/verdicts.csv")
     parser.add_argument("--out", default="dist/sentinel2-cloud-filtering.zip")
     args = parser.parse_args(argv)
-    return build(args.detector_run, args.comparison_dir, args.audit_verdicts, args.out)
+    return build(args.detector_run, args.comparison_dir, args.out)
 
 
 if __name__ == "__main__":

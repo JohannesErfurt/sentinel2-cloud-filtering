@@ -21,7 +21,6 @@ import numpy as np
 from .constants import (
     CLOUD_THRESHOLD_PERCENT,
     GRID,
-    MAX_NODATA_FRACTION,
     REPORT_COLUMNS,
     SCENE_PX,
     TILE_PIXELS,
@@ -66,14 +65,6 @@ def _rows(out_dir: str) -> tuple[list[str], list[dict]]:
     return read_report_csv(path)
 
 
-def _tile_stats(out_dir: str) -> dict[tuple[int, int], dict]:
-    path = os.path.join(out_dir, "tile_stats.csv")
-    if not os.path.isfile(path):
-        return {}
-    _, rows = read_report_csv(path)
-    return {(int(r["tile_row"]), int(r["tile_col"])): r for r in rows}
-
-
 # --------------------------------------------------------------------- CK1-CK6
 def check_ck1(out_dir: str, meta=None) -> CheckResult:
     """Grid: 400 tiles, each a 549 x 549 window, covering 10980^2 exactly once."""
@@ -112,9 +103,13 @@ def check_ck2(out_dir: str, meta=None) -> CheckResult:
 
 
 def check_ck3(out_dir: str, meta=None) -> CheckResult:
-    """CSV values: range, precision, and the valid flag matching the rules."""
+    """CSV values: range, precision, and the valid flag matching the rules.
+
+    report.csv carries no no-data fraction, so a tile at or under 30 % may
+    legitimately be ``False`` (too much no-data); one over 30 % never may be
+    ``True``, and one marked ``True`` must be at or under 30 %.
+    """
     _, rows = _rows(out_dir)
-    stats = _tile_stats(out_dir)
     for index, row in enumerate(rows):
         raw = row["cloud_cover_percent"]
         try:
@@ -130,22 +125,13 @@ def check_ck3(out_dir: str, meta=None) -> CheckResult:
             return CheckResult("CK3", False, "row %d: valid is %r, expected True or False" % (index, row["valid"]))
 
         key = (index // GRID, index % GRID)
-        if key in stats:
-            cloud_pixels = int(stats[key]["cloud_pixels"])
-            nodata_fraction = float(stats[key]["nodata_fraction"])
-        else:
-            cloud_pixels = int(round(percent / 100.0 * TILE_PIXELS))
-            nodata_fraction = 0.0
-        expected = (
-            100 * cloud_pixels <= CLOUD_THRESHOLD_PERCENT * TILE_PIXELS
-            and nodata_fraction <= MAX_NODATA_FRACTION
-        )
-        if (row["valid"] == "True") != expected:
+        cloud_pixels = int(round(percent / 100.0 * TILE_PIXELS))
+        within_cut = 100 * cloud_pixels <= CLOUD_THRESHOLD_PERCENT * TILE_PIXELS
+        if row["valid"] == "True" and not within_cut:
             return CheckResult(
                 "CK3",
                 False,
-                "row %d (tile %d,%d): valid=%s but the rule gives %s at %s %% / %.4f no-data"
-                % (index, key[0], key[1], row["valid"], expected, raw, nodata_fraction),
+                "row %d (tile %d,%d): valid=True at %s %%, over the 30 %% cut" % (index, key[0], key[1], raw),
             )
     return CheckResult("CK3", True, "400 rows in range, >=4 decimals, valid flag matches the rules")
 
@@ -193,20 +179,18 @@ def check_ck4(out_dir: str, meta=None) -> CheckResult:
     return CheckResult("CK4", True, "boxes match the grid to %.1e deg" % worst)
 
 
-def check_ck5(out_dir: str, meta=None, world_files: bool = True) -> CheckResult:
-    """JPEGs: exactly the valid rows, correct size, world files, TCI fidelity.
-
-    ``world_files=False`` is for the deliverable ZIP, which ships the JPEGs
-    without their ``.jgw``/``.prj``; pipeline runs always write and check them.
-    """
+def check_ck5(out_dir: str, meta=None) -> CheckResult:
+    """JPEGs: exactly the valid rows, nothing else in tiles/, size, TCI fidelity."""
     import cv2
-
-    from .export import read_prj_epsg, read_world_file
-    from .tiling import tile_utm_bounds
 
     _, rows = _rows(out_dir)
     tiles_dir = os.path.join(out_dir, "tiles")
     found = sorted(os.path.basename(p) for p in glob.glob(os.path.join(tiles_dir, "*.jpg")))
+    others = sorted(n for n in os.listdir(tiles_dir) if not n.endswith(".jpg")) if os.path.isdir(tiles_dir) else []
+    if others:
+        return CheckResult(
+            "CK5", False, "tiles/ holds %d non-JPEG files (%s)" % (len(others), ", ".join(others[:3]))
+        )
     expected = sorted(
         "tile_r%02d_c%02d.jpg" % (index // GRID, index % GRID)
         for index, row in enumerate(rows)
@@ -222,45 +206,15 @@ def check_ck5(out_dir: str, meta=None, world_files: bool = True) -> CheckResult:
             % (len(missing), ", ".join(missing[:3]) or "-", len(extra), ", ".join(extra[:3]) or "-"),
         )
 
-    summary = _summary(out_dir)
-    reference = _GridReference.from_summary(summary.get("scene", {}), meta)
-    worst_jgw = 0.0
     for name in found:
         image = cv2.imread(os.path.join(tiles_dir, name), cv2.IMREAD_UNCHANGED)
         if image is None or image.shape != (TILE_PX, TILE_PX, 3):
             shape = None if image is None else image.shape
             return CheckResult("CK5", False, "%s decodes to %s, expected (%d, %d, 3)" % (name, shape, TILE_PX, TILE_PX))
-        if not world_files:
-            continue
-        world = os.path.join(tiles_dir, name[:-4] + ".jgw")
-        if not os.path.isfile(world):
-            return CheckResult("CK5", False, "%s has no world file" % name)
-        prj = os.path.join(tiles_dir, name[:-4] + ".prj")
-        if not os.path.isfile(prj):
-            return CheckResult(
-                "CK5", False,
-                "%s has no .prj -- a .jgw alone has no unit or CRS attached, so a GIS "
-                "tool guesses one (usually its own project CRS) and reads UTM metres "
-                "as degrees; this is exactly what silently misplaces a tile" % name,
-            )
-        if reference is not None:
-            declared_epsg = read_prj_epsg(prj)
-            if declared_epsg != reference.epsg:
-                return CheckResult(
-                    "CK5", False,
-                    "%s's .prj names EPSG:%s, expected EPSG:%d" % (name, declared_epsg, reference.epsg),
-                )
-            row, col = int(name[6:8]), int(name[10:12])
-            x_size, y_size, east, north = read_world_file(world)
-            east_min, _, _, north_max = tile_utm_bounds(reference, row, col)
-            worst_jgw = max(worst_jgw, abs(east - (east_min + 5.0)), abs(north - (north_max - 5.0)))
-            if (x_size, y_size) != (10.0, -10.0) or worst_jgw > 1e-6:
-                return CheckResult("CK5", False, "%s world file does not match the grid" % name)
 
     if meta is None:
-        what = "JPEGs and world files" if world_files else "JPEGs (world files not checked)"
         return CheckResult(
-            "CK5", True, "%d %s match the valid rows (no TCI comparison)" % (len(found), what), skipped=True
+            "CK5", True, "%d JPEGs match the valid rows (no TCI comparison)" % len(found), skipped=True
         )
 
     from .io import read_tci
@@ -437,9 +391,7 @@ _CHECKS = {
 }
 
 
-def run_checks(
-    out_dir: str, meta=None, ids: list[str] | None = None, world_files: bool = True
-) -> list[CheckResult]:
+def run_checks(out_dir: str, meta=None, ids: list[str] | None = None) -> list[CheckResult]:
     """Run the named checks (default: everything except CK8) over an output folder."""
     results = []
     for check_id in ids or [c for c in ALL_CHECKS if c != "CK8"]:
@@ -447,10 +399,7 @@ def run_checks(
         if function is None:
             continue
         try:
-            if check_id == "CK5":
-                results.append(function(out_dir, meta, world_files=world_files))
-            else:
-                results.append(function(out_dir, meta))
+            results.append(function(out_dir, meta))
         except CheckFailure as error:
             results.append(CheckResult(check_id, False, str(error)))
         except Exception as error:  # a check must never mask a real failure

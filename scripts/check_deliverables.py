@@ -44,11 +44,6 @@ def main(argv=None):
         help="also run CK8 by repeating the run into a temporary folder (needs --safe-dir)",
     )
     parser.add_argument(
-        "--no-world-files",
-        action="store_true",
-        help="do not require .jgw/.prj next to each JPEG (the deliverable ZIP ships without them)",
-    )
-    parser.add_argument(
         "--checks",
         default=None,
         help="comma-separated subset, e.g. CK2,CK3 (default: all applicable)",
@@ -76,7 +71,7 @@ def main(argv=None):
 
     mode = "full" if meta else "structural"
     print("checking %s (%s)" % (out_dir, mode))
-    results = run_checks(out_dir, meta, [c for c in ids if c != "CK8"], world_files=not args.no_world_files)
+    results = run_checks(out_dir, meta, [c for c in ids if c != "CK8"])
 
     if args.rerun or "CK8" in ids:
         results.append(_determinism(out_dir, args, meta))

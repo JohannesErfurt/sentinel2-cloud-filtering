@@ -122,7 +122,6 @@ class TileStats:
     min_longitude: float
     max_latitude: float
     max_longitude: float
-    extra: dict
 
     @property
     def name(self) -> str:
@@ -135,7 +134,6 @@ def compute_tile_stats(
     col: int,
     cloud_tile: np.ndarray,
     nodata_tile: np.ndarray | None = None,
-    extra: dict | None = None,
 ) -> TileStats:
     """Cloud percentage, no-data fraction and the valid flag for one tile."""
     if cloud_tile.shape != (TILE_PX, TILE_PX):
@@ -170,7 +168,6 @@ def compute_tile_stats(
         min_longitude=min_lon,
         max_latitude=max_lat,
         max_longitude=max_lon,
-        extra=dict(extra or {}),
     )
 
 

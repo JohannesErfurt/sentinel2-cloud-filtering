@@ -51,10 +51,6 @@ class Detector(ABC):
         """
         raise NotImplementedError("%s does not provide scene layers" % self.name)
 
-    def tile_extra(self, row: int, col: int) -> dict:
-        """Extra per-tile values for ``tile_stats.csv``. Empty by default."""
-        return {}
-
     def parameters(self) -> dict:
         """Everything that would change the output, for ``run_summary.json``."""
         return {}
