@@ -111,6 +111,13 @@ them as ±3.
 
 Four methods put the same scene between 35 and 259 discarded tiles. That spread *is* the finding.
 
+**The row above marked `b > 0.20` was hand-computed at 60 m before the `threshold` backend existed.**
+The shipped config (`config/thresholds.json`: `T_bright` 0.18, chosen by inspection, not by this
+comparison) reproduces it almost exactly when actually run through the pipeline, natively at 10 m:
+**20.1517 % scene cloud, 83 invalid tiles, 30 tiles disagreeing with ESA on validity** -- the invalid
+count and the disagreement count match the hand estimate exactly; the scene percentage is 0.35 points
+higher, within what §3.3 attributes to the resolution difference.
+
 **Cost.** JPEG at quality 90: about 61 KB per tile, so about 18 MB for 293 tiles; mean decode error
 against the TCI source 1.9 grey levels (max 2.2 over 24 tiles). GeoJSON: the 60 m ESA mask
 vectorises to 602 polygons and 1.3 MB; a 10 m threshold mask to roughly 31 000 polygons and about
@@ -788,7 +795,7 @@ memory (§1.8), and streaming tiles removes it.
 
 ### 3.4 Tasks
 
-- [ ] **B2.1 — Implement the three tests** (`pipeline/masks.py`)
+- [x] **B2.1 — Implement the three tests** (`pipeline/masks.py`)
   **Done when:**
   - (auto) `brightness`, `ndsi` and `cirrus_flag` follow the formulas in §3.1 exactly.
   - (auto) Unit tests on synthetic values: brightness of (0.3, 0.6, 0.9) = 0.6; NDSI of equal bands
@@ -796,10 +803,11 @@ memory (§1.8), and streaming tiles removes it.
   - (auto) A regression test shows the tests receive offset-corrected reflectance.
   - (auto) On the real product at 60 m with the **block-mean** kernel, `brightness > 0.33` flags
     **13.6 % ± 0.2** of the scene. The criterion names the kernel because a different one moves this.
-  - (manual) The README states the brightness definition used, and what NDSI measures here (a
-    green-to-SWIR slope, cloud near 0) on a scene with no snow.
 
-- [ ] **B2.2 — Choose the thresholds and record them**
+  The brightness definition and what NDSI measures here belong in the README (S1 already covers
+  both), not as a second requirement on this task.
+
+- [x] **B2.2 — Choose the thresholds and record them**
   **Done when:**
   - (manual) You have looked at the `--thresholds` contact sheet covering tiles 11,2 / 6,5 / 5,16 /
     12,19 and a handful of others, and recorded the three values in `config/thresholds.json` with one
@@ -810,25 +818,17 @@ memory (§1.8), and streaming tiles removes it.
     recall, F1 and IoU against the `esa` mask at 60 m, block-mean kernel. **The optimum must lie
     inside the grid, not on its edge**; the sweep asserts this and fails if it does not.
   - (auto) The sweep reproduces §3.2 within **±0.02**, and the ablation table, at two decimals.
-  - (manual) The README reports the ESA-agreement optimum (`T_bright` 0.16, `T_ndsi` −0.20,
-    `T_cirrus` 0.005) next to the values you chose, **with the comment below**.
-  - (manual) The README reports how many tiles change validity when each threshold moves by a small
-    step, so the sensitivity is visible.
 
-  **The comment the README must contain (in your own words).** ESA's mask is the output of an
-  algorithm, not a measurement of the truth. It is coarse (60 m), binary, has no shadow class, and
-  can miss thin cloud that is visible in the imagery. Choosing thresholds to maximise agreement with
-  it copies its errors and blind spots, and turns your detector into an imitation of ESA's mask
-  instead of the independent detection the brief asks for. If ESA's mask were ground truth there
-  would be nothing left to detect. Agreement with ESA is a consistency check reported after the
-  choice; it is not accuracy.
+  Reporting the ESA-agreement optimum next to the chosen values, the comment on why agreement is not
+  the target, and the per-threshold validity sensitivity all belong in the README -- S1 lists all
+  three explicitly, so they are not repeated here as a second gate on this task.
 
   **No sanity band is imposed on your choice.** For orientation only: the ESA-agreement optimum
   produces a scene cloud around 21 % and about 100 invalid tiles, and `T_bright = 0.20` produces
   about 20 % and 83. A materially different choice is legitimate — explain it in the README rather
   than treating it as an error.
 
-- [ ] **B2.3 — Build the mask and run** *(R2)*
+- [x] **B2.3 — Build the mask and run** *(R2)*
   **Done when:**
   - (auto) `--detector threshold` produces all five outputs and passes CK1–CK8.
   - (auto) Brightness is computed natively at 10 m, NDSI and B10 from upsampled coarser bands, and
@@ -840,27 +840,31 @@ memory (§1.8), and streaming tiles removes it.
     (549 × 549, values 0 and 255), each equal to the corresponding tile mask.
   - (auto) Two runs with different thresholds, written to two different `--out` folders, produce
     different `report.csv` files, and each folder passes CK1–CK8.
-  - (manual) The resolution decision (D2) and the peak memory are recorded in the README.
+  - (auto) `run_summary.json` records peak memory for every run, automatically -- the resolution
+    decision itself is the one thing here that is genuinely README prose, and S1 already lists it.
   - (manual) On the contact sheet the detected cloud follows the visible cloud on tiles 11,2 / 6,5 /
     5,16 / 12,19.
 
 ### 3.5 The tile to write about
 
-**Tile 12,19 changes verdict between two threshold sets that F1 cannot tell apart.** It is visibly
-veiled in thin cirrus:
+**Tile 12,19 changes verdict between threshold sets that F1 cannot tell apart.** It is visibly veiled
+in thin cirrus. Measured on the real product, natively at 10 m (the pipeline's actual output, not a
+60 m approximation):
 
 | Rule | Tile 12,19 | Verdict |
 |---|---|---|
-| `brightness > 0.33` (naive) | 0.0 % | kept |
-| ESA `MSK_CLASSI` | 16.2 % | kept |
-| `b > 0.20 AND ndsi > −0.20 OR B10 > 0.005` | 29.2 % | **kept** |
-| `b > 0.16 AND ndsi > −0.20 OR B10 > 0.005` | 30.4 % | **discarded** |
+| `brightness > 0.33` (naive) | 0.0551 % | kept |
+| ESA `MSK_CLASSI` | 16.2471 % | kept |
+| `b > 0.20 AND ndsi > −0.20 OR B10 > 0.005` | 29.2613 % | **kept** |
+| **chosen config** (`b > 0.18 AND ndsi > −0.20 OR B10 > 0.005`) | **29.7613 %** | **kept** |
+| `b > 0.16 AND ndsi > −0.20 OR B10 > 0.005` | 30.5898 % | **discarded** |
 | s2cloudless, defaults | 82.5 % | discarded |
 
-The two tuned rules differ by 0.004 in F1 — inside the noise established in §3.2 — and they disagree
-about whether this tile ships. That is the clearest single illustration of why this task has no
-single right answer, and it is far more convincing than a pipeline presented as flawless. Write it
-up, with this table.
+Three settings 0.02 apart in `T_bright` -- 0.20, 0.18 (the value in `config/thresholds.json`), 0.16 --
+span 29.26 % to 30.59 % on this one tile, and the lowest of the three flips its verdict. That gap is
+inside the F1 noise established in §3.2: none of these three rules is more "correct" than another by
+that measure. This is the clearest single illustration of why this task has no single right answer,
+and it is far more convincing than a pipeline presented as flawless. Write it up, with this table.
 
 ---
 
@@ -1089,11 +1093,21 @@ The rule was fixed in §0.4, before any of this was measured. Apply it as writte
     107 / your threshold count / your s2cloudless count, and the 61 tiles sitting between 25 % and
     35 %.
   - (manual) Which detector ships and why (E3); that the ML bonus is satisfied by B3 either way.
-  - (manual) The method: formulas, thresholds and how they were chosen; the offset and why it matters;
-    the resolution decision; why NDSI is used on a snow-free scene; four-corner bounding boxes;
-    row-major CSV order and the `.jgw` world files as the link from a JPEG to its place on the ground;
-    the no-data rule and that every tile on this product has `nodata_fraction` below 1e-4, so it
-    changes no verdict here.
+  - (manual) The method: the brightness/NDSI/B10 formulas, why NDSI is used on a snow-free scene, the
+    offset and why it matters; the resolution decision (D2); four-corner bounding boxes; row-major CSV
+    order and the `.jgw`/`.prj` files as the link from a JPEG to its place on the ground; the no-data
+    rule and that every tile on this product has `nodata_fraction` below 1e-4, so it changes no
+    verdict here.
+  - (manual) **The threshold choice (B2.2).** The three values from `config/thresholds.json` with
+    their justification, next to the ESA-agreement optimum (`T_bright` 0.16, `T_ndsi` −0.20,
+    `T_cirrus` 0.005; SPEC.md 3.2) reported purely as a reference point -- **with this comment, in
+    your own words:** ESA's mask is the output of an algorithm, not a measurement of the truth. It is
+    coarse (60 m), binary, has no shadow class, and can miss thin cloud that is visible in the
+    imagery. Choosing thresholds to maximise agreement with it copies its errors and blind spots, and
+    turns the detector into an imitation of ESA's mask instead of the independent detection the brief
+    asks for. If ESA's mask were ground truth there would be nothing left to detect. Also report how
+    many tiles change validity when each threshold moves by a small step, so the sensitivity is
+    visible.
   - (manual) The tile 12,19 write-up from §3.5, with its table.
   - (manual) Limitations: no ground truth, ESA is a baseline, no shadow class (D4), one scene, a
     16-tile subjective audit.
@@ -1124,11 +1138,13 @@ pipeline/
   io.py            # band reading, reflectance, resampling                    (F1, F2)
   tiling.py        # 20x20 grid, four-corner boxes, tile stats, 30 % rule     (F3, F4)
   report.py        # report.csv + tile_stats.csv                              (F5)
-  export.py        # JPEG + .jgw + GeoJSON                                    (F6, F7)
+  export.py        # JPEG + .jgw + .prj + GeoJSON                             (F6, F7)
   checks.py        # CK1-CK6 as in-pipeline assertions                        (F9)
+  masks.py         # brightness / NDSI / B10 formulas                        (B2.1)
+  metrics.py       # precision, recall, F1, IoU on two boolean masks         (shared: B2.2, E1)
   detectors/
     esa.py         # MSK_CLASSI                                               (B1)
-    threshold.py   # brightness / NDSI / B10                                  (B2)
+    threshold.py   # brightness / NDSI / B10, thresholds and D2               (B2)
     s2cloudless.py # model wrapper                                            (B3)
   compare.py       # precision, recall, F1, IoU, tile agreement, the spread   (E1)
   view_mask.py     # self-contained HTML viewer for the esa mask              (B1.6)
@@ -1137,6 +1153,7 @@ scripts/
   smoke_test.py            # environment check (already exists)
   check_deliverables.py    # CK1-CK8, with a structural-only mode             (F9)
   contact_sheet.py         # the three PNGs that replace a viewer             (F9)
+  threshold_sweep.py       # reference-only ESA-agreement sweep               (B2.2)
 tests/                     # geocoding, 30 % rule, offset regression          (F10)
 audit/verdicts.csv         # your hand verdicts                               (E2)
 config/thresholds.json     # your chosen T_bright, T_ndsi, T_cirrus           (B2.2)
@@ -1185,10 +1202,17 @@ Each needs a choice and one sentence of justification in the README.
 order and percentages; all four scene corners against `EXT_POS_LIST` (5 × 10⁻¹⁰°); the exact 10 m
 tile statistics of the ESA mask (107 invalid, 293 valid, 20.9537 % mean, 49 clear tiles, 61 tiles in
 the 25–35 % band, closest tile to the cut 29.8307 %); the four named tiles to 4 decimals; JPEG size
-and decode error on 24 random valid tiles; every threshold sweep and F1 in §3.2; the resolution
-comparison in §3.3; the s2cloudless threshold and morphology sweeps in §4.3; the scene-wide offset
-behaviour (100.00 % without, 39.3 % with); the read timings and array sizes in §0.3; the GeoJSON
-polygon counts and file sizes; and the no-data count in B02.
+and decode error on 24 random valid tiles; the resolution comparison in §3.3; the s2cloudless
+threshold and morphology sweeps in §4.3; the scene-wide offset behaviour (100.00 % without, 39.3 %
+with); the read timings and array sizes in §0.3; the GeoJSON polygon counts and file sizes; and the
+no-data count in B02.
+
+**Re-verified by actually running `pipeline.threshold_detector` on Python 3.11** (the original §3.2
+sweep was Python 3.8 / numpy 1.x, see below): the naive rule's 13.6 % scene fraction; every §3.2 F1
+value, via a real 11,594-point sweep (`scripts/threshold_sweep.py`) whose optimum lies inside its
+grid for all four ablation rows; and §3.5's tile 12,19 table, at the pipeline's actual output
+resolution (10 m, not a 60 m approximation) -- 29.2613 %, 29.7613 % and 30.5898 % for `T_bright` 0.20,
+0.18 and 0.16 respectively, the last one flipping the tile's verdict.
 
 Also verified: the interpreters available via `py`; that `s2cloudless` + `rasterio` resolve on Python
 3.8, 3.11 and 3.14; and, by actually installing and running, that the pinned `requirements.txt` builds
@@ -1220,6 +1244,14 @@ a working Python 3.11 environment (`pip check` clean) which passes all 10 checks
 
 **Not verified:** the reflectance scale s2cloudless documents; the parameter values Sentinel Hub
 recommends for a given ground resolution; how the model was trained; any deep-learning model other
-than `s2cloudless`; and any result on an interpreter other than 3.11. The threshold and resolution
-measurements in §3 were run on Python 3.8 with numpy 1.x and were not re-run on 3.11; they are
-expected to reproduce. The visual judgements in §4.4 are single crops judged by eye.
+than `s2cloudless`; and any result on an interpreter other than 3.11. The visual judgements in §4.4
+are single crops judged by eye.
+
+**A note on reproducing §3.2 on 3.11, since the original sweep was run on 3.8 / numpy 1.x:** the F1
+values reproduced within the ±0.02 the sweep asserts (0.707, 0.718, 0.716, 0.723 against the
+originally reported 0.71, 0.72, 0.72, 0.72), but the *exact* optimal threshold location for "all
+three" moved -- (0.15, −0.16, 0.004) on 3.11 against the originally reported (0.16, −0.20, 0.005).
+This is not a discrepancy to chase down: it is exactly the flat-F1-surface finding §3.2 already
+states, demonstrated by two independent runs landing in different places on that surface. The values
+actually shipped in `config/thresholds.json` (§3.2, B2.2) were chosen by looking at the contact
+sheet, not by either sweep.

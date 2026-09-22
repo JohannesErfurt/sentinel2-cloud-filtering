@@ -1,0 +1,15 @@
+{
+  "t_bright": 0.18,
+  "t_ndsi": -0.20,
+  "t_cirrus": 0.005,
+
+  "_chosen_by": "B2.2: inspection on the --thresholds contact sheet (output/comparison/thresholds.png), tiles 11,2 / 6,5 / 5,16 / 12,19, four settings each -- not by fitting to the esa mask.",
+
+  "_justification": {
+    "t_bright": "0.18 is the midpoint of the range SPEC.md 3.2 recommends (0.16-0.20), and the contact sheet gives an independent reason to prefer the middle over either edge: at 0.20 visible haze on tile 12,19 is still left outside the outline, while at 0.14 the genuinely clear tile (11,2) starts picking up false positives -- its flagged fraction rises from ~0.1-0.2% at 0.16-0.20 to 0.3% at 0.14, on ground with no cloud in it at all. 0.18 sits clear of that creep while still catching more of the veil than 0.20 alone.",
+    "t_ndsi": "-0.20, per SPEC.md's own class-mean table: it vetoes vegetation (NDSI -0.238, correctly excluded -- sunlit canopy should never read as cloud) while still allowing bright bare soil (NDSI -0.130) to be called cloud if it is also bright enough, which is the intended 'whiteness veto' behaviour, not a snow test on a scene with none.",
+    "t_cirrus": "0.005 sits well above the clear-sky B10 floor measured on tile 11,2 (mean 0.0014) and is exceeded by individual cirrus pixels within the hazy tile 12,19 even though that tile's own B10 *mean* (0.0041) sits just under it -- the threshold is per-pixel, so it still recovers the brightest wisps without being tripped by ordinary clear-sky noise."
+  },
+
+  "_not_tuned_against": "ESA's MSK_CLASSI mask was not used to pick these values. Its agreement optimum (T_bright 0.16, T_ndsi -0.20, T_cirrus 0.005; see SPEC.md 3.2) is reported next to this choice as a reference point, not a target: copying it would mean reproducing ESA's own blind spots (its coarse 60 m grid, no shadow class, and the under-flagged veil on tile 12,19) rather than detecting cloud independently, which is what the task asks for."
+}
