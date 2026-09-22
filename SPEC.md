@@ -318,7 +318,7 @@ each end in latitude. `pyproj` and an independent hand-written inverse transvers
 
 Reference for tile 6,5: `[49.29258, 10.75286, 49.34311, 10.83015]` (min lat, min lon, max lat, max lon).
 
-- [ ] **F3 — Tile grid and geocoding** (`pipeline/tiling.py`) *(R1)*
+- [x] **F3 — Tile grid and geocoding** (`pipeline/tiling.py`) *(R1)*
   **Done when:**
   - (auto) The grid has exactly 400 tiles; every window is 549 × 549 at 10 m; painting all windows
     onto a 10980² array covers every pixel exactly once.
@@ -326,7 +326,9 @@ Reference for tile 6,5: `[49.29258, 10.75286, 49.34311, 10.83015]` (min lat, min
     (lat 48.62982 … 49.64444, lon 10.35791 … 11.90457) within 1e-4°.
   - (auto) Tile 6,5's bounding box equals the reference above within 2e-5°, and a test rejects a
     two-corner box.
-  - (manual) The README states that bounding boxes use all four corners.
+
+  The README states that bounding boxes use all four corners -- that line lives in S1, not here, so
+  this task does not wait on prose that belongs to the submission write-up.
 
 ### 1.4 Tile statistics, the 30 % rule and no-data
 
@@ -352,7 +354,7 @@ valid      = (cloud_pct <= 30) and (nodata_fraction <= MAX_NODATA)    # MAX_NODA
 
 `nodata_fraction` goes in `tile_stats.csv`, not in `report.csv` — the brief fixes that schema.
 
-- [ ] **F4 — Tile statistics and the 30 % rule** (`pipeline/tiling.py`) *(R3, R4)*
+- [x] **F4 — Tile statistics and the 30 % rule** (`pipeline/tiling.py`) *(R3, R4)*
   **Done when:**
   - (auto) The mean of the 400 tile percentages equals the scene cloud percentage of the same mask.
   - (auto) `valid` is computed with the integer rule, and a test shows it equals `count < 90 420.3`
@@ -362,7 +364,10 @@ valid      = (cloud_pct <= 30) and (nodata_fraction <= MAX_NODATA)    # MAX_NODA
   - (auto) A synthetic all-no-data tile is invalid even though its cloud percentage is 0, and
     `nodata_fraction` appears in `tile_stats.csv` for all 400 tiles.
   - (auto) On this product every tile has `nodata_fraction` below 1e-4, so the no-data rule changes
-    no verdict here. The README says so.
+    no verdict here.
+
+  That last fact belongs in the README (S1 covers it explicitly), but writing it down is not part of
+  what this task is verifying: the rule and the measurement are.
 
 ### 1.5 CSV schema
 
@@ -432,7 +437,7 @@ is still too large, either simplify (tolerance at most 10 m, stated in the READM
 mask at 60 m instead of 10 m — GeoJSON is a bonus deliverable and nobody inspects 31 000 polygons.
 Whichever you do, say it in the README and relax CK7's area tolerance to 0.5 %.
 
-- [ ] **F7 — GeoJSON writer** (`pipeline/export.py`) *(R8, bonus)*
+- [x] **F7 — GeoJSON writer** (`pipeline/export.py`) *(R8, bonus)*
   **Done when:**
   - (auto) Check CK7 passes.
   - (auto) A test proves the coordinate order is (longitude, latitude).
@@ -1034,7 +1039,9 @@ The rule was fixed in §0.4, before any of this was measured. Apply it as writte
   - (manual) Which detector ships and why (E3); that the ML bonus is satisfied by B3 either way.
   - (manual) The method: formulas, thresholds and how they were chosen; the offset and why it matters;
     the resolution decision; why NDSI is used on a snow-free scene; four-corner bounding boxes;
-    row-major CSV order and the `.jgw` world files as the link from a JPEG to its place on the ground.
+    row-major CSV order and the `.jgw` world files as the link from a JPEG to its place on the ground;
+    the no-data rule and that every tile on this product has `nodata_fraction` below 1e-4, so it
+    changes no verdict here.
   - (manual) The tile 12,19 write-up from §3.5, with its table.
   - (manual) Limitations: no ground truth, ESA is a baseline, no shadow class (D4), one scene, a
     16-tile subjective audit.
