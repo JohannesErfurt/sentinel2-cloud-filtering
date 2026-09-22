@@ -260,12 +260,13 @@ test, not a comment (F10).
 Genuinely dark surfaces can land slightly below zero after the offset. That is sensor noise, not a
 bug; clip at 0 only where a downstream consumer requires it, and say where.
 
-- [ ] **F1 — Product reader and constants** (`pipeline/metadata.py`, `pipeline/io.py`)
+- [x] **F1 — Product reader and constants** (`pipeline/metadata.py`, `pipeline/io.py`)
   **Done when:**
   - (auto) The offset and quantification value come from the XML. A copy of the XML with a different
     offset changes the result, and a missing offset yields 0.
-  - (auto) `read_band(band, window=None, out_shape=None)` returns offset-corrected `float32`
-    reflectance. With `out_shape` it block-averages (§1.2).
+  - (auto) `read_reflectance(band, window=None, out_shape=None)` returns offset-corrected `float32`
+    reflectance. With `out_shape` it block-averages (§1.2). Raw digital numbers come from
+    `read_dn`, so neither call can be mistaken for the other.
   - (auto) On the real product, the median of B04 over tile 6,5 is **0.092 ± 0.001**.
   - (auto) A unit test proves that skipping the offset shifts every value by exactly 0.1.
 
@@ -380,7 +381,7 @@ Everything else — tile row and column, the opaque/cirrus split, mean cloud pro
 `nodata_fraction`, the per-tile agreement with the reference — goes in a sidecar `tile_stats.csv`
 that carries explicit `tile_row` and `tile_col` columns.
 
-- [ ] **F5 — CSV writer** (`pipeline/report.py`) *(R6)*
+- [x] **F5 — CSV writer** (`pipeline/report.py`) *(R6)*
   **Done when:**
   - (auto) Checks CK2 and CK3 pass (§1.9).
   - (auto) Row order is row-major and the first data row is tile (0,0).
@@ -508,7 +509,7 @@ a bad run fails instead of producing quiet nonsense. CK7 and CK8 run in `check_d
   - (manual) On the contact sheet, each detector's outline visibly follows the cloud in tiles 6,5 and
     5,16, and tile 12,19 shows the thin veil the detectors disagree about.
 
-- [ ] **F10 — Unit tests** (`tests/`)
+- [x] **F10 — Unit tests** (`tests/`)
   **Done when:**
   - (auto) `pytest` passes on a machine that does not have the `.SAFE` folder.
   - (auto) Tests cover the two places a silent error can hide: **four-corner geocoding** (F3,
