@@ -52,6 +52,13 @@ This allowed me not only to complete the task, but also to explore the underlyin
 
 ## Technical README
 
+**How Claude Code was used.** I used Claude Code to critique and rewrite the plan in `SPEC.md` and
+then to implement it task by task: the pipeline, the three detector backends, the tests, the
+comparison, the viewers, this technical README and the ZIP build. I set the direction and made the
+decisions (which approaches to build, how to read the brief), and Claude Code checked each task
+against the real product before it was ticked off. The 16 visual-audit verdicts in
+`audit/verdicts.csv` were also recorded by Claude Code from rendered true-colour crops, not by me.
+
 ### Install
 
 Use Python 3.11 in a virtual environment — the `py` launcher on Windows also offers 3.8, 3.10 and
@@ -249,6 +256,14 @@ tile window in 0.013 s — the real constraint is memory, and streaming tiles re
 **Four-corner bounding boxes.** Each tile's `min_latitude,min_longitude,max_latitude,max_longitude`
 comes from reprojecting all four UTM corners of the tile, not just two — the scene is rotated enough
 in lat/lon space that a two-corner box would be wrong.
+
+**The tiles are RGB, the detection is not.** Cloud detection uses the spectral bands (B11 and B10 for
+the threshold rule, all 13 for s2cloudless), but the saved tiles are cut from ESA's 8-bit true-colour
+image (`TCI.jp2`, B04/B03/B02), because a JPEG can hold only three 8-bit channels. I read the brief as
+preparing clean RGB training data for an image model, which is what JPEG tiles plus a lat/lon CSV
+suit. If the tiles were meant for multispectral analysis instead, they would need to be GeoTIFFs with
+reflectance values and more bands (at least B08, near-infrared). All 13 bands for the 317 valid tiles
+come to about 2.5 GB, far too much for the ZIP.
 
 **Row-major CSV order, no identity columns.** `report.csv`'s 400 data rows are row-major in
 `(row, col)`: row *i* (0-indexed, after the header) is tile `(i // 20, i % 20)`. The CSV itself has no

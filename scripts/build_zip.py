@@ -8,16 +8,23 @@ Packs, at the archive root: the chosen detector's ``tiles/`` (JPEGs + world file
 ``report.csv``, ``tile_stats.csv``, ``cloud_mask.geojson``, ``run_summary.json``; a
 ``comparison/`` folder with the other two detectors' ``report.csv`` files plus
 ``comparison.md``, ``decision.md``, ``reference_notes.md``, the two sweep CSVs, the
-audit verdicts and the contact-sheet PNGs; and the source tree needed to reproduce
+audit verdicts and the contact sheets; and the source tree needed to reproduce
 everything (``README.md``, ``pipeline/``, ``scripts/``, ``tests/``, ``config/``,
 ``requirements.txt``). No ``.SAFE`` product, no scratch/working files.
+
+The contact sheets are stored as JPEG (quality 85) rather than their original
+PNG: 2.1 MB instead of 14.1 MB, which is what keeps the archive under 25 MB
+without touching the delivered tiles themselves (quality 90, SPEC.md 1.6).
 """
 import argparse
 import os
 import sys
 import zipfile
 
-MAX_ZIP_BYTES = 50 * 1024 * 1024
+import cv2
+
+MAX_ZIP_BYTES = 25_000_000
+CONTACT_SHEET_JPEG_QUALITY = 85
 
 #: Source-tree directories copied wholesale, minus __pycache__ and other junk.
 SOURCE_DIRS = ["pipeline", "scripts", "tests", "config"]
@@ -29,11 +36,10 @@ COMPARISON_FILES = [
     "reference_notes.md",
     "threshold_sweep.csv",
     "s2cloudless_sweep.csv",
-    "tiles.png",
-    "scene.png",
-    "thresholds.png",
-    "s2cloudless_candidates.png",
 ]
+
+#: Contact-sheet PNGs, written into comparison/ as JPEGs.
+CONTACT_SHEETS = ["tiles.png", "scene.png", "thresholds.png", "s2cloudless_candidates.png"]
 
 #: Junk that must never end up inside the ZIP even if it's sitting in a source dir.
 SKIP_SUFFIXES = (".pyc",)
@@ -85,6 +91,17 @@ def build(detector_run, esa_run, s2cloudless_run, comparison_dir, audit_verdicts
             if os.path.isfile(src):
                 zf.write(src, "comparison/%s" % name)
 
+        for name in CONTACT_SHEETS:
+            src = os.path.join(comparison_dir, name)
+            if not os.path.isfile(src):
+                continue
+            ok, buf = cv2.imencode(
+                ".jpg", cv2.imread(src), [cv2.IMWRITE_JPEG_QUALITY, CONTACT_SHEET_JPEG_QUALITY]
+            )
+            if not ok:
+                raise SystemExit("error: could not re-encode %s" % src)
+            zf.writestr("comparison/%s.jpg" % os.path.splitext(name)[0], buf.tobytes(), zipfile.ZIP_STORED)
+
         zf.write(audit_verdicts, "comparison/audit_verdicts.csv")
 
         # Source tree needed to reproduce everything.
@@ -97,9 +114,9 @@ def build(detector_run, esa_run, s2cloudless_run, comparison_dir, audit_verdicts
     size = os.path.getsize(out_path)
     if size > MAX_ZIP_BYTES:
         raise SystemExit(
-            "error: %s is %.1f MB, over the 50 MB limit" % (out_path, size / 1024 / 1024)
+            "error: %s is %.1f MB, over the %.0f MB limit" % (out_path, size / 1e6, MAX_ZIP_BYTES / 1e6)
         )
-    print("%s (%.1f MB)" % (out_path, size / 1024 / 1024))
+    print("%s (%.1f MB)" % (out_path, size / 1e6))
     return 0
 
 

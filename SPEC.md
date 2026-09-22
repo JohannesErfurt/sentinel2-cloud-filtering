@@ -1260,9 +1260,11 @@ The rule was fixed in §0.4, before any of this was measured. Apply it as writte
   - (manual) A fresh clone plus venv reproduces the outputs by following it verbatim.
 
 - [x] **S2 — The single deliverable ZIP** *(R10)* — `scripts/build_zip.py`; built to
-  `dist/sentinel2-cloud-filtering.zip` (34.8 MB).
+  `dist/sentinel2-cloud-filtering.zip` (24.6 MB). The limit was tightened from 50 MB to 25 MB on
+  request; the contact sheets are stored as JPEG (quality 85, 2.1 MB) instead of PNG (14.1 MB) to
+  get there, leaving the delivered tiles at their quality 90.
   **Done when:**
-  - (auto) Exactly **one** ZIP exists, at most 50 MB, containing:
+  - (auto) Exactly **one** ZIP exists, at most 25 MB, containing:
     - `tiles/` — the chosen detector's valid JPEGs and their `.jgw` files *(verified: 951 files =
       317 valid tiles x 3, matching `threshold`'s 83 invalid of 400)*
     - `report.csv` — the chosen detector's report, 400 rows, the six columns of §1.5
