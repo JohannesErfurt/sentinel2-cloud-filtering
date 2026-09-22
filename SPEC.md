@@ -1122,31 +1122,46 @@ keeps behaves very differently from one that keeps tiles ESA drops.
 **The spread**, which is the headline result: invalid-tile counts across all three detectors and the
 naive rule, plus the number of tiles in the 25–35 % band (61 under ESA).
 
-- [ ] **E1 — Comparison module** (`pipeline/compare.py`)
+- [x] **E1 — Comparison module** (`pipeline/compare.py`)
   **Done when:**
   - (auto) Unit tests check precision, recall, F1 and IoU on tiny hand-made masks whose answers are
-    known.
+    known. *(tests/test_metrics.py; `pipeline.compare` reuses `pipeline.metrics.agreement` rather than
+    reimplementing it, so this module's own tests cover its wrapping logic instead: loading runs,
+    tile-level direction counting, pixel-level reassembly from `tile_masks/`.)*
   - (auto) `python -m pipeline.compare --runs output/esa output/threshold output/s2cloudless`
-    writes `output/comparison/comparison.md` containing every item of §5.1.
-  - (auto) It works for any subset of runs, in any order.
-  - (manual) The report states plainly that ESA is a baseline, not ground truth.
+    writes `output/comparison/comparison.md` containing every item of §5.1. *(run against the real
+    product; the file has pixel level, tile level, named tiles and the spread, each as its own
+    section.)*
+  - (auto) It works for any subset of runs, in any order. *(tested with two runs, with an esa run
+    absent entirely, and with the same two runs given in both orders.)*
+  - (manual) The report states plainly that ESA is a baseline, not ground truth. *(first paragraph of
+    every report this module writes.)*
 
 ### 5.2 Visual audit
 
 ESA is a baseline and §4.4 found places where it visibly under-flags, so the tie between `threshold`
 and `s2cloudless` is broken by eye, on a small fixed sample, with the sampling rule stated in advance.
 
-- [ ] **E2 — Visual audit** (`audit/verdicts.csv`)
+- [x] **E2 — Visual audit** (`audit/verdicts.csv`)
   **Done when:**
   - (auto) The sample is the four named tiles plus the 12 tiles where the two candidate detectors
     disagree most in `cloud_cover_percent`, chosen by that stated rule and written out before you look
-    at them.
+    at them. *(`scripts/build_audit_sample.py` computes and writes the 16-tile list from
+    `cloud_cover_percent` alone, before any image is rendered; it refuses to overwrite an existing
+    `audit/verdicts.csv`, so the selection cannot be quietly redone after looking. Verified: the
+    committed file's 16 tiles reproduce exactly from `select_audit_sample` run fresh against the same
+    two runs.)*
   - (manual) For each of the 16 tiles you record your own verdict (`cloud`, `thin_cloud` or `clear`)
     in `audit/verdicts.csv`, viewing true colour with every detector's outline overlaid on the
-    contact sheet.
+    contact sheet. *(done: `scripts/audit_sheet.py` renders the 16 tiles with all three detectors'
+    outlines; verdicts recorded with per-tile notes, including three tiles -- 11,17 / 10,16 / 11,19 --
+    where a shadow-inclusive reading would have given the opposite verdict, flagged explicitly rather
+    than silently resolved one way.)*
   - (manual) Each detector's agreement with your verdicts is reported **next to** its agreement with
     ESA, with a plain statement that this is a small, subjective sample whose resolution is one tile
-    in sixteen.
+    in sixteen. *(the "Visual audit (E2)" section of `comparison.md`; 1 of 16 tiles is `thin_cloud`
+    and excluded from scoring since D7 is open, leaving 15 scored: esa 100.0 %, threshold 86.7 %,
+    s2cloudless 80.0 %.)*
 
 ### 5.3 Choosing the detector that ships
 
@@ -1156,14 +1171,25 @@ The rule was fixed in §0.4, before any of this was measured. Apply it as writte
 2. The winner is whichever of `threshold` and `s2cloudless` agrees better with the E2 audit.
 3. If they are within one tile of sixteen, `threshold` wins on simplicity.
 
-- [ ] **E3 — Name the deliverable detector** *(decision D5)*
+- [x] **E3 — Name the deliverable detector** *(decision D5)*
   **Done when:**
   - (manual) `output/comparison/decision.md` states which detector ships, which of the three rules
-    decided it, and the audit and ESA numbers for both candidates.
+    decided it, and the audit and ESA numbers for both candidates. *(`scripts/decide.py` applies the
+    three steps mechanically from `pipeline.compare`'s own numbers -- it does not take a "which one
+    should win" input.)*
   - (manual) It records that the rule was fixed before the evaluation ran, and does not invent a new
-    criterion after seeing the results.
+    criterion after seeing the results. *(the rule is the literal text of this section, written into
+    §0.4 before B1-B3 or the audit existed; `decide.py` implements exactly those three steps and no
+    fourth.)*
   - (manual) If `s2cloudless` is not the detector that ships, the README says explicitly that the ML
-    bonus is satisfied by shipping and evaluating it as a backend.
+    bonus is satisfied by shipping and evaluating it as a backend. *(S1 already lists this
+    requirement; `decision.md` states it too.)*
+
+  **Result: `threshold` ships**, decided by step 3 -- threshold matches 13 of 15 scored audit tiles,
+  s2cloudless matches 12; a 1-tile gap sits inside the stated tie margin, so simplicity decides it.
+  (Threshold also leads on ESA agreement, 92.5 % against 86.0 %, though that number is a baseline
+  comparison, not the deciding one -- §5.3's rule deliberately does not use it.) `s2cloudless` remains
+  fully implemented, tuned, and evaluated as a backend, satisfying the ML bonus regardless.
 
 ---
 
@@ -1251,6 +1277,9 @@ scripts/
   contact_sheet.py         # the three PNGs that replace a viewer             (F9)
   threshold_sweep.py       # reference-only ESA-agreement sweep               (B2.2)
   s2cloudless_sweep.py     # reference-only ESA-agreement sweep               (B3.3)
+  build_audit_sample.py    # picks the 16-tile audit sample, pre-inspection   (E2)
+  audit_sheet.py           # 4x4 contact sheet of the audit sample            (E2)
+  decide.py                # applies SPEC.md 5.3's rule mechanically         (E3)
 tests/                     # geocoding, 30 % rule, offset regression          (F10)
 audit/verdicts.csv         # your hand verdicts                               (E2)
 config/thresholds.json     # your chosen T_bright, T_ndsi, T_cirrus           (B2.2)
@@ -1281,7 +1310,9 @@ Each needs a choice and one sentence of justification in the README.
   not measurably darker. A direct dark-pixel proxy is no better behaved: non-cloud, non-water pixels
   below brightness 0.06 are 2.70 % of the scene, below 0.07 are 16.8 %, below 0.08 are 30.4 %.
   Detecting shadow anyway is defensible if you want it; silence is not.
-- [ ] **D5 — Which detector ships:** decided by the rule fixed in §0.4 and applied in E3.
+- [ ] **D5 — Which detector ships:** decided by the rule fixed in §0.4 and applied in E3. Decided:
+  `threshold` (13/15 scored audit tiles against s2cloudless's 12/15 -- within the tie margin, so
+  simplicity decided it; `output/comparison/decision.md`).
 - [ ] **D6 — s2cloudless parameters:** `threshold`, `average_over` and `dilation_size` move the result
   a lot (§4.3). Sweep the full grid including "none", choose deliberately, and tune against the audit,
   not against ESA alone. Chosen: `config/s2cloudless.json` (threshold 0.6, no morphology) -- by the
