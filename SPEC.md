@@ -163,10 +163,19 @@ that produces the final tiles. Say so explicitly in the README.
 GeoJSON, the README, all code, and a `comparison/` folder holding the other two detectors' CSVs and
 the evaluation write-up.
 
-**What this plan deliberately does not build.** No bespoke HTML viewers, no browser-side threshold
-sliders, no test suite for the validator. Visual checking is done with matplotlib contact sheets
-(§1.9) and by opening the GeoJSON in QGIS. The budget is 3–5 hours; it belongs in the detectors and
-the evaluation, not in tooling a reviewer never opens.
+**What this plan deliberately does not build.** No browser-side threshold sliders, no test suite for
+the validator. Visual checking is done with matplotlib contact sheets (§1.9) and by opening the
+GeoJSON in QGIS. The budget is 3–5 hours; it belongs in the detectors and the evaluation, not in
+tooling a reviewer never opens.
+
+**Exception, added on request: `pipeline/view_mask.py`.** A self-contained HTML viewer for the `esa`
+backend's mask specifically -- base image, the three MSK_CLASSI layers with toggles and one opacity
+slider, a tile grid with hover stats, zoom and pan. It earns its place for a narrower reason than the
+G1.3/G2.2 viewers this section originally ruled out: `esa` has no parameters, so there is nothing to
+recompute in the browser, which was most of that original cost. It is not a substitute for the
+threshold or s2cloudless backends having their own equivalent, if that is ever asked for; it exists
+because reading cloud percentages off a CSV is a poor way to sanity-check a mask against the imagery
+it came from, and this project's own reviewer wanted to do exactly that.
 
 ### 0.5 Environment
 
@@ -624,6 +633,23 @@ then cut exact 549-pixel tiles. Cutting at 60 m would put tile edges half-way th
     the whole tile.
   - (manual) It states plainly that this mask is a catalogue-grade product for filtering archive
     searches, and is used here as a baseline, **not** as ground truth.
+
+- [x] **B1.6 — Mask viewer** (`pipeline/view_mask.py`, added on request; see §0.4)
+  **Command:** `python -m pipeline.view_mask --safe-dir <SAFE> --out output/comparison/esa_mask_viewer.html
+  [--run output/esa]`.
+  **Done when:**
+  - (auto) The generator asserts the embedded overlay pixel counts equal the mask counts (19.559 %,
+    1.394 %, 0.000 %) and the total equals `Cloud_Coverage_Assessment`, before writing anything.
+  - (auto) With `--run`, every tile's embedded stats match that run's `report.csv`; a test proves a
+    tampered CSV is caught.
+  - (auto) The file is at most 15 MB (measured: 2.0 MB) and contains no `http://` or `https://`
+    reference.
+  - (manual) Opened offline: each layer toggles, the opacity slider works, zoom (pixel-sharp, no
+    smoothing) and pan work, the tile grid and invalid-tile tint work, and hovering shows the correct
+    60 m pixel, UTM coordinate, channel flags, tile id, cloud percentage and lat/lon box. *(verified
+    against the real product: legend percentages exact, tile 11,11 read 47.8575 % invalid with UTM
+    661380 E / 5435220 N at pixel (1023, 1080), matching `600000 + 1023×60` / `5500020 − 1080×60`
+    exactly.)*
 
 ---
 
@@ -1105,6 +1131,7 @@ pipeline/
     threshold.py   # brightness / NDSI / B10                                  (B2)
     s2cloudless.py # model wrapper                                            (B3)
   compare.py       # precision, recall, F1, IoU, tile agreement, the spread   (E1)
+  view_mask.py     # self-contained HTML viewer for the esa mask              (B1.6)
   run.py           # CLI: --safe-dir --detector --out                         (F8)
 scripts/
   smoke_test.py            # environment check (already exists)

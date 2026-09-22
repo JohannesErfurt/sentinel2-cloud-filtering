@@ -20,6 +20,7 @@ import math
 import cv2
 import numpy as np
 import rasterio
+from rasterio.enums import Resampling
 from rasterio.windows import Window
 
 from .constants import BAND_RESOLUTION
@@ -245,15 +246,29 @@ def read_nodata_mask(
     return enlarged[top : top + int(window.height), left : left + int(window.width)]
 
 
-def read_tci(meta: ProductMetadata, window: Window | None = None) -> np.ndarray:
+def read_tci(
+    meta: ProductMetadata,
+    window: Window | None = None,
+    out_shape: tuple[int, int] | None = None,
+) -> np.ndarray:
     """True-colour image as ``(height, width, 3)`` uint8 in **RGB** order.
 
     TCI is a display product: it is already 8-bit and contrast-stretched. It is
     the source for the output JPEGs and must never be used for detection
     (SPEC.md 1.6).
+
+    With ``out_shape`` smaller than the source, GDAL's fast decimated read is
+    used rather than the exact block mean in :func:`read_reflectance`. That
+    approximation matters for a *quantitative* band feeding a detector -- it
+    can be off by thousands of DN (SPEC.md 1.2) -- but this output is a
+    background image in a viewer, never a detection input, so the speed is
+    worth it and a few grey levels of difference are invisible.
     """
     with rasterio.open(meta.tci_path) as src:
-        return np.transpose(src.read(window=window), (1, 2, 0))
+        out = (3,) + tuple(out_shape) if out_shape else None
+        return np.transpose(
+            src.read(window=window, out_shape=out, resampling=Resampling.average), (1, 2, 0)
+        )
 
 
 __all__ = [
