@@ -204,6 +204,10 @@ images finish decoding, permanently locking the view at zero scale (an entirely 
 nothing ever fires a second `resize` event to correct it. Fixed in both viewers with a
 `ResizeObserver` on the canvas's own container plus a guard against a zero-sized read.
 
+**Third exception, on request: `pipeline/view_s2cloudless.py` (B3.5).** The same idea for the model:
+the 60 m probability map ships in the page and one slider sets the probability threshold. Unlike the
+threshold viewer it is exact, not an approximation (B3.5 explains how).
+
 ### 0.5 Environment
 
 **Use Python 3.11 in a virtual environment.** The `py` launcher on this machine offers 3.8, 3.10,
@@ -1094,6 +1098,24 @@ optimum and the shipped config's real score, not just whichever is more flatteri
     on 12,19; the small-cloud "halos" §4.2 describes are a property of the library's default
     morphology, not of the chosen config, which turns morphology off deliberately -- see B3.3.)*
 
+- [x] **B3.5 — Live probability-threshold viewer** (`pipeline/view_s2cloudless.py`, added on request;
+  see §0.4)
+  **Command:** `python -m pipeline.view_s2cloudless --safe-dir <SAFE> --run output/s2cloudless --out output/comparison/s2cloudless_viewer.html`
+  - (auto) One self-contained HTML file, no network references, under 25 MB. *(verified: 14.8 MB)*
+  - (auto) The slider recomputes the mask, per-tile cloud %, the invalid-tile count and scene cloud %
+    in the browser, and matches the pipeline exactly: with `--run`, the generator refuses to write the
+    page unless its per-tile percentages equal that run's `report.csv` within 1e-4 pp. *(verified: 161
+    invalid tiles, 27.7646 % at 0.6, identical to `output/s2cloudless`; the page's own self-check
+    reproduces 204 / 161 / 123 invalid at 0.4 / 0.6 / 0.8.)*
+  - (manual) Two curves (invalid tiles, scene cloud % against the threshold, ESA's 107 tiles /
+    20.95 % as a dashed reference) show the impact of the threshold at a glance; clicking a curve sets
+    the threshold. *(verified in the browser; about 0.1 s per slider move.)*
+  Only the threshold is applied -- `average_over` and `dilation_size` are not, which is exact for the
+  shipped config (both off). Building it found that 16-bit encoding is not enough: rounding the
+  probability to 1/65535 flipped 60 m pixels lying just around 0.6 (up to 0.012 pp, on tiles 9,16 and
+  12,17). The map is
+  therefore packed as 24-bit fixed point, which is exact for float32 probabilities in [0.5, 1).
+
 ---
 
 ## 5. Evaluation and selection
@@ -1278,6 +1300,7 @@ pipeline/
   compare.py       # precision, recall, F1, IoU, tile agreement, the spread   (E1)
   view_mask.py       # self-contained HTML viewer for the esa mask            (B1.6)
   view_thresholds.py # live-slider HTML viewer for the threshold backend      (B2.4)
+  view_s2cloudless.py # live-slider HTML viewer for the s2cloudless backend   (B3.5)
   run.py           # CLI: --safe-dir --detector --out                         (F8)
 scripts/
   smoke_test.py            # environment check (already exists)

@@ -126,6 +126,13 @@ python scripts/decide.py --runs output/esa output/threshold output/s2cloudless -
 Two exception viewers exist beyond the spec's own no-interactive-viewer scope decision, built on
 request to manually sanity-check the two backends that don't ship an official mask: `pipeline/view_mask.py`
 (a static ESA-mask viewer) and `pipeline/view_thresholds.py` (a live-slider threshold viewer).
+A third, `pipeline/view_s2cloudless.py`, does the same for the model: one slider for the
+probability threshold, the mask and per-tile verdicts recomputed live, and two curves showing how the
+invalid-tile count and scene cloud % move with the threshold:
+
+```bash
+python -m pipeline.view_s2cloudless --safe-dir <path> --run output/s2cloudless --out output/comparison/s2cloudless_viewer.html
+```
 
 ### Results — the spread
 
