@@ -197,7 +197,7 @@ def check_ck5(out_dir: str, meta=None) -> CheckResult:
     """JPEGs: exactly the valid rows, correct size, world files, TCI fidelity."""
     import cv2
 
-    from .export import read_world_file
+    from .export import read_prj_epsg, read_world_file
     from .tiling import tile_utm_bounds
 
     _, rows = _rows(out_dir)
@@ -229,7 +229,21 @@ def check_ck5(out_dir: str, meta=None) -> CheckResult:
         world = os.path.join(tiles_dir, name[:-4] + ".jgw")
         if not os.path.isfile(world):
             return CheckResult("CK5", False, "%s has no world file" % name)
+        prj = os.path.join(tiles_dir, name[:-4] + ".prj")
+        if not os.path.isfile(prj):
+            return CheckResult(
+                "CK5", False,
+                "%s has no .prj -- a .jgw alone has no unit or CRS attached, so a GIS "
+                "tool guesses one (usually its own project CRS) and reads UTM metres "
+                "as degrees; this is exactly what silently misplaces a tile" % name,
+            )
         if reference is not None:
+            declared_epsg = read_prj_epsg(prj)
+            if declared_epsg != reference.epsg:
+                return CheckResult(
+                    "CK5", False,
+                    "%s's .prj names EPSG:%s, expected EPSG:%d" % (name, declared_epsg, reference.epsg),
+                )
             row, col = int(name[6:8]), int(name[10:12])
             x_size, y_size, east, north = read_world_file(world)
             east_min, _, _, north_max = tile_utm_bounds(reference, row, col)

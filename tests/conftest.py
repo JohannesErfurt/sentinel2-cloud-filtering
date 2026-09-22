@@ -129,7 +129,7 @@ def synthetic_run(tmp_path, meta):
 
     from pipeline.report import write_report_csv, write_tile_stats_csv
     from pipeline.tiling import scene_cloud_percent, tile_utm_bounds
-    from pipeline.export import write_world_file
+    from pipeline.export import write_prj_file, write_world_file
 
     def cloud_for(row, col):
         # 16 clear tiles, the rest solidly over the cut.
@@ -149,6 +149,7 @@ def synthetic_run(tmp_path, meta):
                     [int(cv2.IMWRITE_JPEG_QUALITY), 90])
         east_min, _, _, north_max = tile_utm_bounds(meta, item.row, item.col)
         write_world_file(str(tiles_dir / (item.name + ".jgw")), east_min, north_max)
+        write_prj_file(str(tiles_dir / (item.name + ".prj")), meta.epsg)
 
     write_report_csv(str(out_dir / "report.csv"), stats)
     write_tile_stats_csv(str(out_dir / "tile_stats.csv"), stats)

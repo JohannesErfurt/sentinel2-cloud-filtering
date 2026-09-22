@@ -411,17 +411,32 @@ rasterio, convert RGB to BGR for OpenCV, and write at quality 90 (about 61 KB pe
 ```
 
 `report.csv` cannot carry a tile identifier — the brief fixes its six columns — so the world file is
-what makes the imagery self-locating. It costs nothing, it is a standard, and dragging any tile into
-QGIS lands it in the right place, which is a direct visual proof that the geocoding in F3 is correct.
+what makes the imagery self-locating.
+
+**A `.jgw` alone is not enough, and this was wrong in an earlier draft of this spec.** A world file is
+six numbers with no unit and no CRS attached — nothing in it says they are UTM 32N metres rather than,
+say, degrees. A GIS package that only has the JPEG and its `.jgw` has to guess a CRS for those numbers,
+and the guess is usually whatever the current project is already in. Dragged into a WGS84 (degree)
+project, `610985` (an easting in metres) is read as `610985°` of longitude, which is meaningless and
+wraps around the globe every few screen pixels — a mouse move of a centimetre swinging the coordinate
+readout by 200°. Measured while writing this spec: exactly this happened on the first real attempt to
+drag a tile into QGIS.
+
+**Write a `.prj` sidecar too, alongside the `.jgw`.** It is the CRS's WKT as plain text
+(`pyproj.CRS.from_epsg(epsg).to_wkt("WKT1_ESRI")`), and QGIS, ArcGIS and GDAL all read it automatically
+from beside an image with no prompt. With it, dragging any tile into QGIS lands it in the right place
+with no manual "assign CRS" step, which is a direct visual proof that the geocoding in F3 is correct.
 
 - [ ] **F6 — JPEG and world-file writer** (`pipeline/export.py`) *(R5)*
   **Done when:**
   - (auto) Check CK5 passes.
   - (auto) A test catches a red/blue channel swap (per-channel means of the decoded JPEG match the
     TCI window within 2 grey levels).
-  - (auto) Every JPEG has a matching `.jgw`, and the easting/northing it encodes equals the F3 grid
-    for that tile exactly.
-  - (manual) One tile dragged into QGIS lands on the correct part of the scene.
+  - (auto) Every JPEG has a matching `.jgw` and `.prj`; the `.jgw`'s easting/northing equals the F3
+    grid for that tile exactly, and the `.prj` names the product's own EPSG code.
+  - (manual) One tile dragged into QGIS lands on the correct part of the scene, with no manual CRS
+    assignment. The first attempt (tile 11,2, `.jgw` only) failed exactly as described above; pending
+    a repeat with the `.prj` now written alongside it.
 
 ### 1.7 GeoJSON export
 
@@ -489,7 +504,7 @@ a bad run fails instead of producing quiet nonsense. CK7 and CK8 run in `check_d
 | CK2 | **CSV schema.** The header is exactly the six columns of §1.5; 400 data rows; no extra columns. |
 | CK3 | **CSV values.** `cloud_cover_percent` is in [0, 100] with at least 4 decimals; `valid` is `True`/`False` and equals the integer 30 % rule combined with the no-data rule on every row. |
 | CK4 | **Geography.** Every box has min < max and equals the recomputed four-corner box within 1e-6°; the union of the 400 boxes equals the scene footprint within 1e-4°. |
-| CK5 | **JPEGs.** The files in `tiles/` are exactly the valid rows (`tile_rRR_cCC.jpg` plus `.jgw`); none for invalid tiles; each decodes to 549 × 549 × 3; mean absolute difference to the TCI window is at most 3 grey levels. |
+| CK5 | **JPEGs.** The files in `tiles/` are exactly the valid rows (`tile_rRR_cCC.jpg` plus `.jgw` and `.prj`); none for invalid tiles; each decodes to 549 × 549 × 3; the `.prj` names the product's own CRS; mean absolute difference to the TCI window is at most 3 grey levels. |
 | CK6 | **Consistency.** The mean of the 400 percentages equals the scene cloud percentage in `run_summary.json` within 1e-3; the count of `True` rows equals the number of JPEGs. |
 | CK7 | **GeoJSON.** A valid FeatureCollection in (lon, lat) order, every coordinate inside the footprint, every geometry valid, and total polygon area (in UTM) equal to the mask's pixel area within 1e-6 relative — or 0.5 % if §1.7 simplification was applied. |
 | CK8 | **Determinism.** Running the same detector twice gives a byte-identical `report.csv` and the same JPEG file list. |

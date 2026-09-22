@@ -126,6 +126,28 @@ def test_world_file_places_the_tile_on_the_grid(tmp_path, meta):
     assert north == pytest.approx(north_max - 5.0)
 
 
+def test_prj_file_names_the_right_crs(tmp_path, meta):
+    """A .jgw alone has no unit or CRS; the .prj is what stops it being misread.
+
+    Measured directly: without a .prj, QGIS reads a UTM easting like 610985 as
+    610985 degrees of longitude -- meaningless, and it wraps around the globe
+    every few screen pixels once past +/-180.
+    """
+    from pipeline.export import read_prj_epsg, write_prj_file
+
+    path = write_prj_file(str(tmp_path / "tile.prj"), meta.epsg)
+    assert read_prj_epsg(path) == meta.epsg
+
+
+def test_prj_file_is_plain_text_wkt(tmp_path, meta):
+    from pipeline.export import write_prj_file
+
+    path = write_prj_file(str(tmp_path / "tile.prj"), meta.epsg)
+    text = open(path, encoding="utf8").read()
+    assert text.startswith("PROJCS[")
+    assert "UTM" in text or "Transverse_Mercator" in text
+
+
 # ------------------------------------------------------------------------- F7
 def _square_mask(size=20):
     mask = np.zeros((size, size), dtype=bool)

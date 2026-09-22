@@ -68,6 +68,21 @@ def test_ck5_catches_a_missing_world_file(synthetic_run):
     assert _ids(run_checks(str(synthetic_run), None, ["CK5"]))["CK5"].ok is False
 
 
+def test_ck5_catches_a_missing_prj_file(synthetic_run):
+    """A .jgw alone silently misplaces a tile in any GIS tool -- see SPEC.md 1.6."""
+    prj = sorted((synthetic_run / "tiles").glob("*.prj"))[0]
+    os.remove(prj)
+    assert _ids(run_checks(str(synthetic_run), None, ["CK5"]))["CK5"].ok is False
+
+
+def test_ck5_catches_a_prj_naming_the_wrong_crs(synthetic_run):
+    from pipeline.export import write_prj_file
+
+    prj = sorted((synthetic_run / "tiles").glob("*.prj"))[0]
+    write_prj_file(str(prj), 4326)  # a real CRS, just not this product's
+    assert _ids(run_checks(str(synthetic_run), None, ["CK5"]))["CK5"].ok is False
+
+
 def test_ck6_catches_a_summary_that_disagrees_with_the_csv(synthetic_run):
     path = synthetic_run / "run_summary.json"
     summary = json.loads(path.read_text(encoding="utf8"))

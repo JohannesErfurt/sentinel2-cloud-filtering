@@ -29,6 +29,7 @@ from .export import (
     DEFAULT_JPEG_QUALITY,
     build_geojson,
     write_geojson,
+    write_prj_file,
     write_tile_jpeg,
     write_world_file,
 )
@@ -169,6 +170,11 @@ def run(args: argparse.Namespace) -> dict:
                 write_tile_jpeg(os.path.join(tiles_dir, item.name + ".jpg"), rgb, args.jpeg_quality)
                 east_min, _, _, north_max = tile_utm_bounds(meta, row, col)
                 write_world_file(os.path.join(tiles_dir, item.name + ".jgw"), east_min, north_max)
+                # A .jgw alone is numbers with no unit or CRS attached, so a GIS
+                # tool has to guess one -- usually its own project CRS, which
+                # turns UTM metres into nonsense degrees. The .prj sidecar is
+                # what lets a plain drag-and-drop land in the right place.
+                write_prj_file(os.path.join(tiles_dir, item.name + ".prj"), meta.epsg)
                 written += 1
 
             if args.save_tile_masks:
