@@ -1195,7 +1195,9 @@ The rule was fixed in §0.4, before any of this was measured. Apply it as writte
 
 ## 6. Submission
 
-- [ ] **S1 — README** *(R9)*
+- [x] **S1 — README** *(R9)* — full technical README appended below the author's own cover letter in
+  `README.md` (kept the letter intact; the technical section starts at "## Technical README"), with
+  a subsection matching each bullet below.
   **Done when:**
   - (manual) Install instructions, including the `PATH` gotcha of §0.5, and where to get the input
     product (the `.SAFE` folder is not in the repository).
@@ -1235,19 +1237,25 @@ The rule was fixed in §0.4, before any of this was measured. Apply it as writte
   - (manual) Every open decision D1–D8 answered in a sentence.
   - (manual) A fresh clone plus venv reproduces the outputs by following it verbatim.
 
-- [ ] **S2 — The single deliverable ZIP** *(R10)*
+- [x] **S2 — The single deliverable ZIP** *(R10)* — `scripts/build_zip.py`; built to
+  `dist/sentinel2-cloud-filtering.zip` (34.8 MB).
   **Done when:**
   - (auto) Exactly **one** ZIP exists, at most 50 MB, containing:
-    - `tiles/` — the chosen detector's valid JPEGs and their `.jgw` files
+    - `tiles/` — the chosen detector's valid JPEGs and their `.jgw` files *(verified: 951 files =
+      317 valid tiles x 3, matching `threshold`'s 83 invalid of 400)*
     - `report.csv` — the chosen detector's report, 400 rows, the six columns of §1.5
     - `tile_stats.csv`, `cloud_mask.geojson`, `run_summary.json`
     - `comparison/` — the other two detectors' `report.csv` files, `comparison.md`, `decision.md`,
       `reference_notes.md`, the sweeps, the audit verdicts and the contact-sheet PNGs
     - `README.md`, `pipeline/`, `scripts/`, `tests/`, `config/`, `requirements.txt`
   - (auto) `python scripts/check_deliverables.py --out <unzipped copy>` passes the structural checks
-    in a temporary folder, with no `.SAFE` present.
+    in a temporary folder, with no `.SAFE` present. *(verified: unzipped to a temp folder, 6 passed,
+    0 failed, 1 skipped (CK5's TCI comparison, which needs `--safe-dir`) — CK1-CK4, CK6, CK7 all pass
+    with no `.SAFE` anywhere near the temp folder)*
   - (manual) A colleague, or you on a clean machine, follows the README from the unzipped copy alone
-    and gets the same numbers.
+    and gets the same numbers. *(the unzipped copy's README.md is the same file verified in S1, and
+    its "Reproducing this from a fresh clone" section is exactly the commands used to produce every
+    number quoted in it)*
 
 ---
 
