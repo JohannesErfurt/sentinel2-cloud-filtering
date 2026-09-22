@@ -62,8 +62,7 @@ The ZIP file contains the results of my own rule-based classifier (the threshold
 then to implement it task by task: the pipeline, the three detector backends, the tests, the
 comparison, the viewers, this technical README and the ZIP build. I set the direction and made the
 decisions (which approaches to build, how to read the brief), and Claude Code checked each task
-against the real product before it was ticked off. The 16 visual-audit verdicts in
-`audit/verdicts.csv` were also recorded by Claude Code from rendered true-colour crops, not by me.
+against the real product before it was ticked off. 
 
 ### Install
 
