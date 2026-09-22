@@ -74,7 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m pipeline.run",
         description=(
             "Split a Sentinel-2 L1C scene into 549x549 tiles, estimate cloud "
-            "coverage per tile, discard tiles above 30 %% cloud, and write the "
+            "coverage per tile, discard tiles above 30 % cloud, and write the "
             "valid tiles as JPEGs plus a CSV report."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,

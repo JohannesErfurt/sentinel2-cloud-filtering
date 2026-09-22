@@ -530,7 +530,7 @@ scene-wide `float32` band is 482 MB. Building the threshold mask scene-wide at 1
 B04 plus upsampled B11 and B10 and peaks around 2.4 GB. Stream the tiles; keep a scene-wide assembly
 behind an optional flag, used only for the GeoJSON and for the cross-check in B2.3.
 
-- [ ] **F8 — Pipeline command** (`pipeline/run.py`)
+- [x] **F8 — Pipeline command** (`pipeline/run.py`)
   **Done when:**
   - (auto) The command above produces the five outputs listed, for each of the three detectors.
   - (auto) `run_summary.json` records: detector, all parameters actually used, the resampling kernels,
@@ -538,7 +538,9 @@ behind an optional flag, used only for the GeoJSON and for the cross-check in B2
   - (auto) It exits 0, `--help` documents every option, and it fails loudly with a clear message if
     `--safe-dir` is wrong.
   - (auto) Default path is streaming; peak resident memory stays under 1 GB for all three detectors.
-  - (auto) CK8 passes (determinism).
+    *(measured on the real product: esa 740.6 MB, threshold 536.0 MB, s2cloudless 585.5 MB.)*
+  - (auto) CK8 passes (determinism). *(verified for all three detectors, including two full runs of
+    the slower `threshold` and `s2cloudless` backends, not just a quick re-check.)*
 
 ### 1.9 Checks, tests and looking at the output
 
@@ -565,7 +567,7 @@ a bad run fails instead of producing quiet nonsense. CK7 and CK8 run in `check_d
 - `--scene` mode: the whole scene at 60 m with the chosen mask overlaid, plus the 20 × 20 grid and
   invalid tiles tinted. One PNG for the README.
 
-- [ ] **F9 — Checks and contact sheets** (`pipeline/checks.py`, `scripts/check_deliverables.py`, `scripts/contact_sheet.py`)
+- [x] **F9 — Checks and contact sheets** (`pipeline/checks.py`, `scripts/check_deliverables.py`, `scripts/contact_sheet.py`)
   **Done when:**
   - (auto) CK1–CK6 run at the end of every pipeline run and abort it on failure.
   - (auto) `python scripts/check_deliverables.py --out <folder> [--safe-dir <SAFE>]` runs CK1–CK8 and
@@ -573,8 +575,13 @@ a bad run fails instead of producing quiet nonsense. CK7 and CK8 run in `check_d
     without the TCI comparison, CK6, CK7 without the area comparison), which is what runs on an
     unzipped deliverable.
   - (auto) `scripts/contact_sheet.py` produces the three PNGs above and each is at most 5 MB.
+    *(measured with all three detectors: `tiles.png` 1.4 MB, `scene.png` 4.4 MB, `thresholds.png`
+    4.1 MB.)*
   - (manual) On the contact sheet, each detector's outline visibly follows the cloud in tiles 6,5 and
-    5,16, and tile 12,19 shows the thin veil the detectors disagree about.
+    5,16, and tile 12,19 shows the thin veil the detectors disagree about. *(verified with all three
+    detectors overlaid: esa/threshold/s2cloudless track the visible cloud closely on 6,5 and 5,16;
+    on 12,19 the three outlines cover visibly different extents, from ESA's thin line to
+    s2cloudless's much broader coverage -- exactly the disagreement §3.5 and §4.5 describe.)*
 
 - [x] **F10 — Unit tests** (`tests/`)
   **Done when:**
