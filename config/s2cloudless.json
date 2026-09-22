@@ -1,0 +1,17 @@
+{
+  "prob_threshold": 0.6,
+  "average_over": null,
+  "dilation_size": null,
+
+  "_chosen_by": "B3.3: the ESA-agreement sweep (scripts/s2cloudless_sweep.py) for orientation, plus a visual check on tiles 11,2 / 6,5 / 5,16 / 12,19 at four candidate settings (output/comparison/s2cloudless_candidates.png) -- not by fitting to the esa mask alone (decision D6).",
+
+  "_justification": {
+    "prob_threshold": "0.6 sits between the library's own default (0.4, which discards 259/400 tiles -- 65% of the scene) and the ESA-agreement F1 optimum (0.7-0.8). The visual check is what rules out the optimum end: at 0.8, coverage of the visibly-veiled tile 12,19 drops from 82.5% (at 0.4) to 33.1% -- the model's mask starts to converge toward ESA's own under-detection of thin cloud (ESA scores that tile 16.2%), which is exactly the failure mode this backend is supposed to correct, not reproduce. At 0.6 the tile still scores 51.1%, more than three times ESA's figure, while the scene-wide discard rate drops to a far more defensible 160/400 (40%) against the default's 259/400 (65%).",
+    "average_over": "None (off). Every morphology setting only adds cloud (SPEC.md 4.3); with no averaging, the raw per-pixel probability threshold does the discriminating work without pre-smoothing it into blockier regions first.",
+    "dilation_size": "None (off), for the same reason: dilation only inflates already-flagged regions further, widening the halos SPEC.md 4.4 already documents around small clouds. Skipping it keeps the mask as close to the model's own raw judgement as this backend gets."
+  },
+
+  "_not_tuned_against": "The ESA-agreement optimum (threshold 0.8, average_over 4, dilation_size 2; F1 0.768 -- scripts/s2cloudless_sweep.py) was not used. Chasing it would have meant preferring a setting that visibly erodes the model's main advantage over ESA -- catching thin cloud ESA misses -- in exchange for looking more like ESA on a metric ESA's own coarseness makes an imperfect target (SPEC.md 3.2, D6).",
+
+  "_e2_audit_pending": "SPEC.md's decision D6 asks this choice to be tuned against the visual audit (E2, audit/verdicts.csv), not against ESA alone. E2 does not exist in this repository yet -- this choice used an informal visual check on the four named tiles instead (see output/comparison/s2cloudless_candidates.png), which is not the same thing as the formal audit. If E2 is implemented later, revisit this choice against it."
+}

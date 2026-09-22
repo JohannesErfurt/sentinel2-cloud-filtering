@@ -59,6 +59,12 @@ class Detector(ABC):
         """Everything that would change the output, for ``run_summary.json``."""
         return {}
 
+    def write_scene_artifacts(self, meta: ProductMetadata, out_dir: str) -> None:
+        """Extra scene-level files a backend wants saved beside the standard
+        five outputs -- e.g. s2cloudless's raw probability map (B3.2). A
+        no-op by default; called once per run, after the tile loop."""
+        return
+
     def close(self) -> None:
         """Release anything held open. Called when a run finishes."""
 

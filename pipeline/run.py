@@ -186,18 +186,25 @@ def run(args: argparse.Namespace) -> dict:
                 )
             if not args.quiet and (index + 1) % 50 == 0:
                 log("  %3d/400 tiles  |  %d valid so far" % (index + 1, written))
+
+        valid = sum(1 for s in stats if s.valid)
+        scene_percent = scene_cloud_percent(stats)
+
+        write_report_csv(os.path.join(out_dir, "report.csv"), stats)
+        write_tile_stats_csv(os.path.join(out_dir, "tile_stats.csv"), stats)
+
+        geojson_info: dict = {}
+        if not args.no_geojson:
+            geojson_info = _write_geojson(meta, detector, out_dir, args, log)
+
+        # After the tile loop and the GeoJSON, not before: a detector that
+        # caches a scene-wide array (esa, threshold at 60 m, s2cloudless) can
+        # reuse it here for free. Closing the detector first -- as an earlier
+        # version of this function did -- forced scene_layers() to reload and
+        # re-verify the whole mask from scratch on every single run.
+        detector.write_scene_artifacts(meta, out_dir)
     finally:
         detector.close()
-
-    valid = sum(1 for s in stats if s.valid)
-    scene_percent = scene_cloud_percent(stats)
-
-    write_report_csv(os.path.join(out_dir, "report.csv"), stats)
-    write_tile_stats_csv(os.path.join(out_dir, "tile_stats.csv"), stats)
-
-    geojson_info: dict = {}
-    if not args.no_geojson:
-        geojson_info = _write_geojson(meta, detector, out_dir, args, log)
 
     summary = {
         "detector": detector.name,

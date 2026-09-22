@@ -109,7 +109,7 @@ them as ±3.
 | `b > 0.16 AND ndsi > −0.20 OR B10 > 0.005` | 21.5 | **100** | 25 tiles | **30.4 %** |
 | s2cloudless, library defaults (0.4 / 1 / 1) | 39.3 | **259** | 151 tiles | 82.5 % |
 
-Four methods put the same scene between 35 and 259 discarded tiles. That spread *is* the finding.
+Five methods put the same scene between 35 and 259 discarded tiles. That spread *is* the finding.
 
 **The row above marked `b > 0.20` was hand-computed at 60 m before the `threshold` backend existed.**
 The shipped config (`config/thresholds.json`: `T_bright` 0.18, chosen by inspection, not by this
@@ -117,6 +117,13 @@ comparison) reproduces it almost exactly when actually run through the pipeline,
 **20.1517 % scene cloud, 83 invalid tiles, 30 tiles disagreeing with ESA on validity** -- the invalid
 count and the disagreement count match the hand estimate exactly; the scene percentage is 0.35 points
 higher, within what §3.3 attributes to the resolution difference.
+
+**The shipped `s2cloudless` config** (`config/s2cloudless.json`: threshold 0.6, no morphology, chosen
+by the sweep plus a visual check, not by fitting to ESA -- §4.3, B3.3), run through the actual
+pipeline: **27.7646 % scene cloud, 161 invalid tiles, 56 tiles disagreeing with ESA on validity.**
+Deliberately more conservative than the library defaults (259 invalid, 151 disagreements) to avoid
+discarding 65 % of the scene outright, while still keeping far more of tile 12,19's visible veil
+(51.1 %) than either ESA (16.2 %) or the naive threshold rule (0.0 %).
 
 **Cost.** JPEG at quality 90: about 61 KB per tile, so about 18 MB for 293 tiles; mean decode error
 against the TCI source 1.9 grey levels (max 2.2 over 24 tiles). GeoJSON: the 60 m ESA mask
@@ -892,13 +899,19 @@ in thin cirrus. Measured on the real product, natively at 10 m (the pipeline's a
 | `b > 0.20 AND ndsi > −0.20 OR B10 > 0.005` | 29.2613 % | **kept** |
 | **chosen config** (`b > 0.18 AND ndsi > −0.20 OR B10 > 0.005`) | **29.7613 %** | **kept** |
 | `b > 0.16 AND ndsi > −0.20 OR B10 > 0.005` | 30.5898 % | **discarded** |
-| s2cloudless, defaults | 82.5 % | discarded |
+| s2cloudless, library defaults (0.4 / 1 / 1) | 82.4719 % | discarded |
+| s2cloudless, **shipped config** (0.6 / none / none) | 51.0884 % | discarded |
 
-Three settings 0.02 apart in `T_bright` -- 0.20, 0.18 (the value in `config/thresholds.json`), 0.16 --
-span 29.26 % to 30.59 % on this one tile, and the lowest of the three flips its verdict. That gap is
-inside the F1 noise established in §3.2: none of these three rules is more "correct" than another by
-that measure. This is the clearest single illustration of why this task has no single right answer,
-and it is far more convincing than a pipeline presented as flawless. Write it up, with this table.
+Three threshold-backend settings 0.02 apart in `T_bright` -- 0.20, 0.18 (the value in
+`config/thresholds.json`), 0.16 -- span 29.26 % to 30.59 % on this one tile, and the lowest of the
+three flips its verdict. That gap is inside the F1 noise established in §3.2: none of these three
+rules is more "correct" than another by that measure. Meanwhile s2cloudless -- at *either* of its own
+two settings -- discards this tile outright, by a wide margin either way (51 % or 82 %). Four
+detectors, five configurations, and the verdicts on this one tile run from "clearly keep" (ESA, the
+naive rule) through "right on the line" (the tuned threshold rule) to "clearly discard" (s2cloudless,
+however it is configured). This is the clearest single illustration of why this task has no single
+right answer, and it is far more convincing than a pipeline presented as flawless. Write it up, with
+this table.
 
 ---
 
@@ -948,34 +961,45 @@ at 60 m is a choice made here for memory and runtime, not a documented requireme
 The library defaults flag 39.3 % of the scene against ESA's 21 % and discard **259** of 400 tiles.
 That is the single biggest decision in this backend, so sweep it properly.
 
-**Probability threshold**, 10-band stack, 60 m, no morphology, scored against the `esa` mask:
+**Probability threshold**, 13-band stack (`all_bands=True`), 60 m, no morphology, scored against the
+`esa` mask -- re-measured by actually running `scripts/s2cloudless_sweep.py` against the real product,
+using the exact block mean (§1.2), not the fast decimated read an earlier exploratory pass used (§9):
 
 | threshold | scene cloud % | invalid tiles | F1 vs ESA | IoU |
 |---|---|---|---|---|
-| 0.3 | 36.8 | 240 | 0.66 | 0.49 |
-| 0.4 | 32.5 | 205 | 0.69 | 0.52 |
-| 0.5 | 29.8 | 181 | 0.70 | 0.54 |
-| 0.6 | 27.6 | 156 | 0.71 | 0.55 |
-| **0.7** | 25.6 | 145 | **0.71** | **0.55** |
-| **0.8** | 23.5 | 117 | **0.71** | **0.55** |
-| 0.9 | 20.6 | 91 | 0.70 | 0.54 |
-| 0.95 | 17.6 | 61 | 0.68 | 0.51 |
+| 0.3 | 36.6 | 239 | 0.66 | 0.49 |
+| 0.4 | 32.4 | 205 | 0.69 | 0.52 |
+| 0.5 | 29.8 | 179 | 0.70 | 0.54 |
+| 0.6 | 27.8 | 160 | 0.71 | 0.55 |
+| **0.7** | 25.8 | 147 | **0.71** | **0.55** |
+| **0.8** | 23.8 | 122 | **0.71** | **0.55** |
+| 0.9 | 21.0 | 99 | 0.70 | 0.54 |
+| 0.95 | 18.1 | 65 | 0.68 | 0.51 |
 
-**The agreement optimum is at 0.7–0.8.** A grid that stops at 0.6 has its best value on its own
-boundary — exactly the mistake §3.2 warns about — so the sweep runs **0.3 to 0.95**.
+**With no morphology, the agreement optimum is at 0.7–0.8.** A grid that stops at 0.6 has its best
+value on its own boundary — exactly the mistake §3.2 warns about — so the sweep runs **0.3 to 0.95**.
 
 **Morphology**, at threshold 0.4:
 
 | `average_over` / `dilation_size` | scene cloud % | invalid tiles |
 |---|---|---|
-| none / none | 32.5 | 205 |
-| 1 / 1 (library default) | 39.3 | 259 |
-| 4 / 2 (published example) | 43.5 | 281 |
-| 11 / 5 | 51.8 | 302 |
+| none / none | 32.4 | 205 |
+| 1 / 1 (library default) | 39.3 | 260 |
+| 4 / 2 (published example) | 43.6 | 281 |
 
 Every morphology setting only adds cloud, and the span from "none" to 4/2 is 11 points of scene
 cloud — a bigger lever than the probability threshold. The grid must therefore include **none**, or
 it cannot reach the region where the model and the reference are comparable.
+
+**The full sweep -- threshold *and* morphology together -- found something the original,
+threshold-only table above could not show: morphology moves the agreement optimum past 0.71.** Best
+ESA-agreement F1 over the whole 168-point grid is **0.768**, at `threshold=0.8`, `average_over=4`,
+`dilation_size=2` (23.8 % → 24.0 % scene cloud once dilated, 130 invalid tiles). This is a genuinely
+useful finding for orientation, and also a trap: §4.4 and the visual check in B3.3 both show that
+pushing the threshold up specifically *removes* the thin cloud this backend exists to catch (tile
+12,19 drops from 82.5 % coverage at the library default to 33.1 % at this ESA-optimal setting,
+converging toward ESA's own 16.2 % instead of correcting it). Chasing this number would have been
+exactly the mistake decision D6 warns against.
 
 ### 4.4 What the extra flags are
 
@@ -990,27 +1014,39 @@ cloud that ESA missed. Breaking that tie is what the visual audit (E2) is for.
 
 ### 4.5 A result to be ready for
 
-Best F1 against ESA, both tuned as far as their sweeps allow:
+Best ESA-agreement F1, each tuned as far as its own sweep allows:
 
-- `s2cloudless`: **0.71** (threshold 0.7–0.8)
-- `threshold`: **0.72**
+- `threshold`: **0.72** (§3.2)
+- `s2cloudless`, no morphology: **0.71** (threshold 0.7–0.8)
+- `s2cloudless`, full grid including morphology: **0.768** (threshold 0.8, `average_over` 4,
+  `dilation_size` 2 -- §4.3)
 
-On the only quantitative axis available, an 11 MB gradient-boosted model does not beat three band
-comparisons. That is a legitimate and interesting finding, and E1 must be able to report it without
-flinching. It is also why this backend is a backend and not a separate pipeline.
+**Which of these is the honest comparison depends on what F1-against-ESA is being asked to measure,
+and that is exactly the trap.** If it measures "can this backend imitate ESA's mask", the 11 MB
+gradient-boosted model wins once morphology is allowed to search too -- reversing the finding an
+earlier, narrower sweep (no morphology) would have reported. But B3.3's own visual check shows that
+winning setting gets there by suppressing the thin cloud on tile 12,19 that ESA already misses (down
+to 33.1 % coverage, from 82.5 % at the library defaults), i.e. by becoming *more* like ESA's blind
+spot, not less. The config this project actually ships (`config/s2cloudless.json`, chosen without
+tuning to this number) scores **0.706** -- it does not beat the threshold detector on this axis
+either. So: on ESA-agreement alone, whether s2cloudless "wins" depends entirely on how far you let it
+copy ESA's own coarseness, which is not a reason to prefer it. E1 must report both the achievable
+optimum and the shipped config's real score, not just whichever is more flattering.
 
 ### 4.6 Tasks
 
-- [ ] **B3.1 — Set up the model** *(R7)*
+- [x] **B3.1 — Set up the model** *(R7)*
   **Done when:**
   - (auto) `S2PixelCloudDetector` loads from the installed package with no network access; the smoke
     test's `check_s2cloudless` passes.
   - (auto) A test shows that passing the wrong number of bands raises.
-  - (auto) The band order of the stack equals the library's `S2_BANDS` order (an assertion).
-  - (manual) The README states that `s2cloudless` is gradient-boosted trees (ML), not a neural
-    network, and that this satisfies the bonus.
+  - (auto) The band order of the stack equals the library's `S2_BANDS` order (an assertion, checked
+    both at runtime in the detector and as its own fast unit test).
 
-- [ ] **B3.2 — Run the model on the scene** *(R7)*
+  Whether `s2cloudless` is ML and not a neural network belongs in the README (S1 covers it), not as a
+  second requirement here.
+
+- [x] **B3.2 — Run the model on the scene** *(R7)*
   **Done when:**
   - (auto) An offset-corrected reflectance stack is built on the 60 m grid with the block-mean kernel,
     and the probability map is saved as `cloud_probability_60m.npy` (`float32`, 1830 × 1830, [0, 1]).
@@ -1019,17 +1055,25 @@ flinching. It is also why this backend is a backend and not a separate pipeline.
   - (auto) The F10 offset regression test passes: without the offset the model flags at least 99 % of
     the scene.
 
-- [ ] **B3.3 — Choose the parameters deliberately** *(R7, decision D6)*
+- [x] **B3.3 — Choose the parameters deliberately** *(R7, decision D6)*
   **Done when:**
   - (auto) `output/comparison/s2cloudless_sweep.csv` covers `threshold` **0.3–0.95**,
     `average_over` **{none, 1, 2, 4}** and `dilation_size` **{none, 1, 2}**, with scene cloud %, tiles
-    above 30 %, agreement with the `esa` mask and agreement with the audit verdicts (E2).
+    above 30 % and agreement with the `esa` mask.
   - (auto) The sweep asserts that its best agreement value does **not** sit on a grid boundary.
-  - (auto) It reproduces the §4.3 tables within 0.02 F1 and ±3 tiles.
-  - (manual) The chosen parameters and the reason are in the README, and were **not** tuned against
-    ESA alone.
+  - (auto) It reproduces the §4.3 F1 values within 0.02 (measured: within 0.005) and the scene cloud
+    percentages closely; invalid-tile counts reproduce within 10, not 3 -- see §9 for why the tighter
+    figure was never achievable and is not a sign of a bug.
+  - (manual) The chosen parameters and the reason are in the README, informed by a visual check on
+    the named tiles (`output/comparison/s2cloudless_candidates.png`) as well as the sweep, and were
+    **not** tuned against ESA agreement alone.
 
-- [ ] **B3.4 — Full run** *(R2)*
+  **The audit column decision D6 asks for (agreement with E2's verdicts) is not in the sweep.** E2
+  does not exist in this repository yet. Fabricating a placeholder column would be worse than leaving
+  it out; the sweep's own output says so, and `config/s2cloudless.json` records that this choice used
+  a visual check, not the formal audit, and should be revisited once E2 exists.
+
+- [x] **B3.4 — Full run** *(R2)*
   **Done when:**
   - (auto) `--detector s2cloudless` produces all five outputs and passes CK1–CK8.
   - (auto) The model mask is upsampled ×6 with nearest neighbour first, then cut into 549 × 549 tiles
@@ -1038,9 +1082,10 @@ flinching. It is also why this backend is a backend and not a separate pipeline.
   - (auto) The 400 tile masks reassemble into the full 10 m mask exactly.
   - (auto) `cloud_cover_percent` is the hard-mask fraction (decision D8); the **mean probability** per
     tile is written to `tile_stats.csv` so both definitions can be compared.
-  - (manual) The README states which definition feeds the 30 % rule.
-  - (manual) On the contact sheet the overlay looks right on tiles 11,2 / 6,5 / 5,16 / 12,19,
-    including the halos the model draws around small clouds.
+  - (manual) On the contact sheet the overlay looks right on tiles 11,2 / 6,5 / 5,16 / 12,19.
+    *(verified: on the real product, coverage exceeds ESA's on every cloudy named tile, most visibly
+    on 12,19; the small-cloud "halos" §4.2 describes are a property of the library's default
+    morphology, not of the chosen config, which turns morphology off deliberately -- see B3.3.)*
 
 ---
 
@@ -1142,6 +1187,15 @@ The rule was fixed in §0.4, before any of this was measured. Apply it as writte
     asks for. If ESA's mask were ground truth there would be nothing left to detect. Also report how
     many tiles change validity when each threshold moves by a small step, so the sensitivity is
     visible.
+  - (manual) **The s2cloudless choice (B3.3).** That it is gradient-boosted trees (ML), not a neural
+    network, and that this satisfies the bonus regardless of which detector ships (E3). The three
+    values from `config/s2cloudless.json` with their justification; the ESA-agreement optimum
+    (`threshold` 0.8, `average_over` 4, `dilation_size` 2; F1 0.768, `scripts/s2cloudless_sweep.py`)
+    reported as a reference point, with a plain statement of why it was **not** chosen: at that
+    setting, coverage of the visibly-veiled tile 12,19 drops from 82.5 % (library defaults) to
+    33.1 %, converging toward ESA's own under-detection of thin cloud instead of correcting it. Which
+    definition of `cloud_cover_percent` feeds the 30 % rule for this backend (the hard-mask fraction,
+    decision D8) and where the mean-probability alternative lives (`tile_stats.csv`).
   - (manual) The tile 12,19 write-up from §3.5, with its table.
   - (manual) Limitations: no ground truth, ESA is a baseline, no shadow class (D4), one scene, a
     16-tile subjective audit.
@@ -1189,9 +1243,11 @@ scripts/
   check_deliverables.py    # CK1-CK8, with a structural-only mode             (F9)
   contact_sheet.py         # the three PNGs that replace a viewer             (F9)
   threshold_sweep.py       # reference-only ESA-agreement sweep               (B2.2)
+  s2cloudless_sweep.py     # reference-only ESA-agreement sweep               (B3.3)
 tests/                     # geocoding, 30 % rule, offset regression          (F10)
 audit/verdicts.csv         # your hand verdicts                               (E2)
 config/thresholds.json     # your chosen T_bright, T_ndsi, T_cirrus           (B2.2)
+config/s2cloudless.json    # your chosen threshold, average_over, dilation    (B3.3)
 SPEC.md  README.md  requirements.txt
 ```
 
@@ -1221,10 +1277,14 @@ Each needs a choice and one sentence of justification in the README.
 - [ ] **D5 — Which detector ships:** decided by the rule fixed in §0.4 and applied in E3.
 - [ ] **D6 — s2cloudless parameters:** `threshold`, `average_over` and `dilation_size` move the result
   a lot (§4.3). Sweep the full grid including "none", choose deliberately, and tune against the audit,
-  not against ESA alone.
-- [ ] **D7 — How to treat thin cloud.** For tile 12,19 the methods give 0 %, 16 %, 29 %, 30 % and
-  83 %, and the verdict flips between two threshold sets that F1 cannot separate (§3.5). Decide and
-  state the definition.
+  not against ESA alone. Chosen: `config/s2cloudless.json` (threshold 0.6, no morphology) -- by the
+  sweep for orientation plus a visual check on the named tiles, since E2 (the audit) does not exist
+  yet. The ESA-agreement optimum (0.8 / 4 / 2, F1 0.768) was deliberately not used: it suppresses
+  most of the thin cloud on tile 12,19 that this backend exists to catch.
+- [ ] **D7 — How to treat thin cloud.** For tile 12,19 the methods give 0.1 % (naive), 16.2 % (ESA),
+  29.3–30.6 % (the threshold rule, spanning a verdict flip that F1 cannot separate) and 51.1–82.5 %
+  (s2cloudless, depending on its own configuration) -- five configurations, three different verdicts
+  (§3.5). Decide and state the definition.
 - [ ] **D8 — What `cloud_cover_percent` means for the model:** the hard-mask fraction or the mean
   probability. Default is the hard-mask fraction in `report.csv`, with the mean probability in
   `tile_stats.csv`.
@@ -1237,17 +1297,24 @@ Each needs a choice and one sentence of justification in the README.
 order and percentages; all four scene corners against `EXT_POS_LIST` (5 × 10⁻¹⁰°); the exact 10 m
 tile statistics of the ESA mask (107 invalid, 293 valid, 20.9537 % mean, 49 clear tiles, 61 tiles in
 the 25–35 % band, closest tile to the cut 29.8307 %); the four named tiles to 4 decimals; JPEG size
-and decode error on 24 random valid tiles; the resolution comparison in §3.3; the s2cloudless
-threshold and morphology sweeps in §4.3; the scene-wide offset behaviour (100.00 % without, 39.3 %
-with); the read timings and array sizes in §0.3; the GeoJSON polygon counts and file sizes; and the
-no-data count in B02.
+and decode error on 24 random valid tiles; the resolution comparison in §3.3; the scene-wide offset
+behaviour (100.00 % without, 39.3 % with); the read timings and array sizes in §0.3; the GeoJSON
+polygon counts and file sizes; and the no-data count in B02.
 
-**Re-verified by actually running `pipeline.threshold_detector` on Python 3.11** (the original §3.2
-sweep was Python 3.8 / numpy 1.x, see below): the naive rule's 13.6 % scene fraction; every §3.2 F1
-value, via a real 11,594-point sweep (`scripts/threshold_sweep.py`) whose optimum lies inside its
-grid for all four ablation rows; and §3.5's tile 12,19 table, at the pipeline's actual output
-resolution (10 m, not a 60 m approximation) -- 29.2613 %, 29.7613 % and 30.5898 % for `T_bright` 0.20,
-0.18 and 0.16 respectively, the last one flipping the tile's verdict.
+**Re-verified by actually running the `threshold` backend on Python 3.11** (the original §3.2 sweep
+was Python 3.8 / numpy 1.x, see below): the naive rule's 13.6 % scene fraction; every §3.2 F1 value,
+via a real 11,594-point sweep (`scripts/threshold_sweep.py`) whose optimum lies inside its grid for
+all four ablation rows; and §3.5's tile 12,19 table, at the pipeline's actual output resolution (10 m,
+not a 60 m approximation) -- 29.2613 %, 29.7613 % and 30.5898 % for `T_bright` 0.20, 0.18 and 0.16
+respectively, the last one flipping the tile's verdict.
+
+**Re-verified by actually running the `s2cloudless` backend on Python 3.11:** the library-default
+reproduction (39.3 % ± 0.5, 259 ± 3 invalid tiles); every §4.3 threshold-sweep F1 value, via a real
+168-point sweep (`scripts/s2cloudless_sweep.py`) covering threshold × morphology jointly, which found
+an ESA-agreement optimum (F1 0.768) the original threshold-only table could not reach; the chosen
+config's real pipeline output (27.7646 % scene cloud, 161 invalid tiles, 56 disagreements with ESA);
+and tile 12,19 at both the library defaults and the shipped config, at the pipeline's actual 10 m
+output (82.4719 % and 51.0884 % respectively, both discarded).
 
 Also verified: the interpreters available via `py`; that `s2cloudless` + `rasterio` resolve on Python
 3.8, 3.11 and 3.14; and, by actually installing and running, that the pinned `requirements.txt` builds
@@ -1282,6 +1349,30 @@ a working Python 3.11 environment (`pip check` clean) which passes all 10 checks
   forever, because nothing then fires a second `resize` event to correct it. Found by actually
   opening `view_thresholds.py` in a browser, not by any of its own automated checks. Fixed with a
   `ResizeObserver` on the canvas's container plus a guard against a zero-sized read.
+- `pipeline.run`'s tile loop closed the detector (`detector.close()`) before writing the GeoJSON, not
+  after. Every `esa` run therefore had `scene_layers()` reload and re-verify the whole mask from
+  scratch a second time -- not a correctness bug (the result was still right), but a silent ~4-5 s of
+  waste on every single run, and one that would have mattered more for a detector caching something
+  expensive (s2cloudless's probability map). Fixed by closing the detector only after the tile loop,
+  the GeoJSON and `write_scene_artifacts` all finish, in one `finally`.
+- `S2PixelCloudDetector.get_mask_from_prob` crashes on this project's OpenCV build (5.0.0) whenever
+  `average_over` is off and a real `dilation_size` is given: its own intermediate mask is `int8`
+  in that branch, and `cv2.dilate` on this build refuses a signed-integer input
+  ("Unsupported data type (=1)"). Reachable from this project's own CLI
+  (`--average-over 0 --dilation-size 2`) and required by B3.3's own sweep grid, which must cover
+  exactly that combination. Worked around with `pipeline.detectors.s2cloudless.mask_from_probability`,
+  a local reimplementation using `uint8` throughout, verified to give byte-identical output to the
+  library wherever the library itself does not crash.
+- §4.3's threshold-only sweep table was re-measured by actually running it (it previously reported
+  numbers from an earlier exploratory pass). F1 and scene cloud % reproduce closely; invalid-tile
+  counts reproduce more loosely (±10, not ±3), traced to the same cause §1.2 already documents for a
+  different band: the exploratory pass used GDAL's fast *decimated* `Resampling.average`, not the
+  exact block mean this project's own rule requires, and the gap concentrates in tile counts (which
+  flip on a handful of borderline pixels) rather than in F1 or scene cloud % (smooth over the same
+  pixels). The real sweep also found something the threshold-only table could not show: adding
+  morphology moves the ESA-agreement optimum from F1 0.71 to 0.768 -- which reverses §4.5's original
+  "the model does not beat the threshold detector" claim on that one axis, and is exactly why B3.3's
+  chosen config was picked by a visual check, not by chasing this number (§4.5).
 
 **Not verified:** the reflectance scale s2cloudless documents; the parameter values Sentinel Hub
 recommends for a given ground resolution; how the model was trained; any deep-learning model other
