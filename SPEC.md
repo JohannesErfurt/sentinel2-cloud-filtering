@@ -179,10 +179,23 @@ tooling a reviewer never opens.
 backend's mask specifically -- base image, the three MSK_CLASSI layers with toggles and one opacity
 slider, a tile grid with hover stats, zoom and pan. It earns its place for a narrower reason than the
 G1.3/G2.2 viewers this section originally ruled out: `esa` has no parameters, so there is nothing to
-recompute in the browser, which was most of that original cost. It is not a substitute for the
-threshold or s2cloudless backends having their own equivalent, if that is ever asked for; it exists
-because reading cloud percentages off a CSV is a poor way to sanity-check a mask against the imagery
-it came from, and this project's own reviewer wanted to do exactly that.
+recompute in the browser, which was most of that original cost. It exists because reading cloud
+percentages off a CSV is a poor way to sanity-check a mask against the imagery it came from, and this
+project's own reviewer wanted to do exactly that.
+
+**Second exception, also on request: `pipeline/view_thresholds.py` (B2.4).** This is the more
+expensive G2.2-style viewer the paragraph above says `view_mask.py` is not a substitute for --
+brightness, NDSI and B10 shipped as quantised rasters, three live sliders, no button, immediate
+recompute in the browser. Built once actually asked for. The cost this section originally weighed
+against is real: the page is 9.7 MB (against 2.0 MB for the parameter-free `esa` viewer), and 8-bit
+quantisation -- the precision ceiling a `<canvas>` enforces regardless of the source PNG's bit depth --
+means the combined three-branch rule can disagree with the real pipeline's full-precision output by a
+few tenths of a percentage point, which the page discloses rather than hides. Building it surfaced a
+real, generally applicable bug: initialising pan/zoom from `element.clientWidth/Height` inside a
+`window resize` listener reads 0 if the very first layout pass has not settled yet when data-URI
+images finish decoding, permanently locking the view at zero scale (an entirely blank canvas) since
+nothing ever fires a second `resize` event to correct it. Fixed in both viewers with a
+`ResizeObserver` on the canvas's own container plus a guard against a zero-sized read.
 
 ### 0.5 Environment
 
@@ -845,6 +858,27 @@ memory (§1.8), and streaming tiles removes it.
   - (manual) On the contact sheet the detected cloud follows the visible cloud on tiles 11,2 / 6,5 /
     5,16 / 12,19.
 
+- [x] **B2.4 — Live threshold viewer** (`pipeline/view_thresholds.py`, added on request; see §0.4)
+  **Command:** `python -m pipeline.view_thresholds --safe-dir <SAFE> --out output/comparison/threshold_viewer.html
+  [--config config/thresholds.json]`.
+  **Done when:**
+  - (auto) The generator refuses to write the file if any of three preset triples' quantised scene
+    cloud percentage differs from the full-precision computation by more than 0.4 pp.
+  - (auto) Each quantised layer round-trips through its own PNG encoding exactly (byte-for-byte).
+  - (auto) The file is at most 25 MB (measured: 9.7 MB) and contains no `http://` or `https://`
+    reference.
+  - (manual) Opened offline: dragging each of the three sliders updates the mask, the per-branch and
+    total percentages, the invalid-tile count and the copy-values boxes immediately, with no button;
+    zoom stays pixel-sharp; the ESA-agreement-optimum button and the ESA outline toggle both work and
+    are labelled reference only; the four named-tile jump buttons work. *(verified against the real
+    product: the self-check banner passes on load; dragging T_bright from 0.180 to 0.595 dropped total
+    cloud from 19.9956 % to 10.3814 % and invalid tiles from 84 to 29, live; hovering pixel (1330, 283)
+    read UTM 679800 E / 5483040 N, matching `600000 + 1330×60` / `5500020 − 283×60` exactly; jumping to
+    tile 12,19 with the ESA outline on shows the outline tracing only a fraction of what the detector
+    flags -- the clearest possible restatement of §3.5's finding.)*
+  - (manual) Extremes behave sensibly: `T_bright = 1` with `T_cirrus` at its maximum flags almost
+    nothing; `T_bright = 0` with the NDSI veto at its minimum flags nearly everything.
+
 ### 3.5 The tile to write about
 
 **Tile 12,19 changes verdict between threshold sets that F1 cannot tell apart.** It is visibly veiled
@@ -1147,7 +1181,8 @@ pipeline/
     threshold.py   # brightness / NDSI / B10, thresholds and D2               (B2)
     s2cloudless.py # model wrapper                                            (B3)
   compare.py       # precision, recall, F1, IoU, tile agreement, the spread   (E1)
-  view_mask.py     # self-contained HTML viewer for the esa mask              (B1.6)
+  view_mask.py       # self-contained HTML viewer for the esa mask            (B1.6)
+  view_thresholds.py # live-slider HTML viewer for the threshold backend      (B2.4)
   run.py           # CLI: --safe-dir --detector --out                         (F8)
 scripts/
   smoke_test.py            # environment check (already exists)
@@ -1241,6 +1276,12 @@ a working Python 3.11 environment (`pip check` clean) which passes all 10 checks
   speed (§0.3, §1.8).
 - The B10 branch was described as imprecise "in a thin ring at cloud edges"; at 60 m it is blocky in
   6 × 6 squares throughout (§3.3).
+- Both HTML viewers (B1.6, B2.4) initialised pan/zoom from `element.clientWidth/Height` inside a
+  `window resize` listener. If the page's very first layout pass had not settled by the time its
+  data-URI images finished decoding, that read 0, and the view locked at scale 0 (a blank canvas)
+  forever, because nothing then fires a second `resize` event to correct it. Found by actually
+  opening `view_thresholds.py` in a browser, not by any of its own automated checks. Fixed with a
+  `ResizeObserver` on the canvas's container plus a guard against a zero-sized read.
 
 **Not verified:** the reflectance scale s2cloudless documents; the parameter values Sentinel Hub
 recommends for a given ground resolution; how the model was trained; any deep-learning model other

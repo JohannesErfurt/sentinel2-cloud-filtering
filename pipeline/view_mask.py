@@ -330,6 +330,7 @@ function composite() {
 
 function resizeCanvas() {
   const w = wrap.clientWidth, h = wrap.clientHeight;
+  if (w <= 0 || h <= 0) return; // flex layout not settled yet; ResizeObserver fires again when it is
   stage.width = w; stage.height = h;
   state.minScale = Math.min(w / N, h / N) * 0.98;
   if (!state._initialised) {
@@ -340,6 +341,13 @@ function resizeCanvas() {
   }
   draw();
 }
+// A plain 'resize' listener misses two cases this page needs: the very first
+// layout pass (data-URI images can finish loading before the flex box has
+// been given a size at all, reading clientWidth/Height as 0 and locking in a
+// scale of exactly 0 forever, since _initialised then blocks ever correcting
+// it) and the sidebar's own width never changing the *window* size. A
+// ResizeObserver on the element itself fires for both.
+new ResizeObserver(resizeCanvas).observe(wrap);
 
 function draw() {
   ctx.imageSmoothingEnabled = false;
@@ -466,7 +474,7 @@ document.getElementById('opacity').addEventListener('input', (e) => {
   composite(); draw();
 });
 
-window.addEventListener('resize', resizeCanvas);
+// window resize is now handled by the ResizeObserver above.
 
 Promise.all([
   loadImage(DATA.base), loadImage(DATA.layers.opaque),
