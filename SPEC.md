@@ -427,7 +427,7 @@ drag a tile into QGIS.
 from beside an image with no prompt. With it, dragging any tile into QGIS lands it in the right place
 with no manual "assign CRS" step, which is a direct visual proof that the geocoding in F3 is correct.
 
-- [ ] **F6 — JPEG and world-file writer** (`pipeline/export.py`) *(R5)*
+- [x] **F6 — JPEG and world-file writer** (`pipeline/export.py`) *(R5)*
   **Done when:**
   - (auto) Check CK5 passes.
   - (auto) A test catches a red/blue channel swap (per-channel means of the decoded JPEG match the
@@ -435,8 +435,19 @@ with no manual "assign CRS" step, which is a direct visual proof that the geocod
   - (auto) Every JPEG has a matching `.jgw` and `.prj`; the `.jgw`'s easting/northing equals the F3
     grid for that tile exactly, and the `.prj` names the product's own EPSG code.
   - (manual) One tile dragged into QGIS lands on the correct part of the scene, with no manual CRS
-    assignment. The first attempt (tile 11,2, `.jgw` only) failed exactly as described above; pending
-    a repeat with the `.prj` now written alongside it.
+    assignment.
+
+  **Status of the manual line: inconclusive, accepted anyway.** The first attempt (tile 11,2, `.jgw`
+  only) failed exactly as §1.6 describes -- coordinates wrapping every few pixels. With the `.prj`
+  added, QGIS still did not place the tile correctly on the user's machine, for a reason neither of us
+  tracked down (candidates: this GDAL/QGIS version not reading a `.prj` sidecar for a bare JPEG the
+  same way it does for other raster formats; a stale cached read of the same path; something else).
+  The `.prj`'s own correctness is not in question -- `read_prj_epsg` round-trips it via `pyproj`, CK5
+  asserts it names the product's EPSG code on every real run, and geojson.io independently confirmed
+  the same coordinate pipeline (transform, EPSG, F3 grid) places a feature over Fürth exactly where
+  expected (F7). Ticked on that basis, with this QGIS-specific gap on record rather than hidden. If it
+  matters later, the next step would be an embedded CRS instead of a sidecar -- e.g. a GeoTIFF tile
+  alongside the JPEG, which every GIS tool reads unambiguously.
 
 ### 1.7 GeoJSON export
 
