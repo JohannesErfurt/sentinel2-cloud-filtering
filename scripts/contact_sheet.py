@@ -5,7 +5,7 @@ straight into the README, and they can be diffed between runs -- none of which a
 browser widget manages.
 
     python scripts/contact_sheet.py --safe-dir <SAFE> --tiles      --runs output/esa output/threshold
-    python scripts/contact_sheet.py --safe-dir <SAFE> --scene      --runs output/esa
+    python scripts/contact_sheet.py --safe-dir <SAFE> --scene      --runs output/threshold
     python scripts/contact_sheet.py --safe-dir <SAFE> --thresholds
 
 ``--tiles`` and ``--scene`` read the per-tile masks a run wrote with
@@ -76,7 +76,7 @@ def _legend_handles(names):
 
 def sheet_tiles(meta, runs, tiles, out_path):
     """True colour per tile, with each run's mask outlined in its own colour."""
-    names = [os.path.basename(os.path.normpath(r)) for r in runs]
+    names = [_detector_name(r) for r in runs]
     columns = len(tiles)
     figure, axes = plt.subplots(1, columns, figsize=(3.2 * columns, 3.7), dpi=160)
     axes = np.atleast_1d(axes)
@@ -103,17 +103,17 @@ def sheet_scene(meta, run_dir, out_path):
     rgb = read_tci(meta)
     small = np.dstack([block_mean(rgb[:, :, c], 6) for c in range(3)]).astype(np.uint8)
 
-    scene_mask = np.zeros((GRID * TILE_PX // 6, GRID * TILE_PX // 6), dtype=bool)
-    step = TILE_PX // 6  # 91 whole 60 m pixels per tile, remainder ignored for display
+    # Assemble at 10 m, then reduce by 6: a tile is 91.5 px at 60 m, so placing
+    # tiles directly on the 60 m grid would drift up to 10 px by the last tile.
+    full = np.zeros((GRID * TILE_PX, GRID * TILE_PX), dtype=bool)
     for row in range(GRID):
         for col in range(GRID):
             mask = _load_tile_mask(run_dir, row, col)
-            if mask is None:
-                continue
-            reduced = block_mean(mask.astype(np.float32), 3)[: step * 2 : 2, : step * 2 : 2]
-            target = scene_mask[row * step : row * step + reduced.shape[0],
-                                col * step : col * step + reduced.shape[1]]
-            target |= reduced > 0.5
+            if mask is not None:
+                full[row * TILE_PX : (row + 1) * TILE_PX, col * TILE_PX : (col + 1) * TILE_PX] = mask
+    n60 = full.shape[0] // 6
+    scene_mask = full.reshape(n60, 6, n60, 6).sum(axis=(1, 3), dtype=np.uint8) > 18
+    del full
 
     figure, axis = plt.subplots(figsize=(10, 10), dpi=160)
     axis.imshow(small)
@@ -140,11 +140,13 @@ def sheet_scene(meta, run_dir, out_path):
                 facecolor="black", alpha=0.35, edgecolor="none",
             )
         )
-    axis.set_title(
-        "%s -- mask in red, %d of 400 tiles discarded (shaded)"
-        % (os.path.basename(os.path.normpath(run_dir)), len(invalid)),
-        fontsize=11,
-    )
+    title = "%s -- mask in red, %d of 400 tiles discarded (shaded)" % (_detector_name(run_dir), len(invalid))
+    parameters = _run_parameters(run_dir)
+    if parameters:
+        title += "\n" + ", ".join("%s = %s" % (k, v) for k, v in sorted(parameters.items()))
+    axis.set_title(title, fontsize=11)
+    axis.set_xlim(-0.5, small.shape[1] - 0.5)
+    axis.set_ylim(small.shape[0] - 0.5, -0.5)
     axis.set_xticks([])
     axis.set_yticks([])
     figure.tight_layout()
@@ -153,16 +155,38 @@ def sheet_scene(meta, run_dir, out_path):
     return out_path
 
 
+def _run_summary(run_dir):
+    path = os.path.join(run_dir, "run_summary.json")
+    if not os.path.isfile(path):
+        return {}
+    import json
+
+    with open(path, encoding="utf8") as handle:
+        return json.load(handle)
+
+
+def _detector_name(run_dir):
+    return _run_summary(run_dir).get("detector") or os.path.basename(os.path.normpath(run_dir))
+
+
+def _run_parameters(run_dir):
+    return {k: v for k, v in _run_summary(run_dir).get("parameters", {}).items() if v is not None}
+
+
 def sheet_thresholds(meta, tiles, out_path):
-    """The named tiles at four threshold settings, for choosing them by eye."""
+    """The named tiles at five threshold settings, including the shipped one."""
     try:
         from pipeline.detectors import build
+        from pipeline.detectors.threshold import load_config
     except ImportError:  # pragma: no cover
         raise SystemExit("pipeline.detectors is unavailable")
 
+    config = load_config()
+    shipped = {k: config[k] for k in ("t_bright", "t_ndsi", "t_cirrus")}
     settings = [
         {"t_bright": 0.33, "t_ndsi": -1.0, "t_cirrus": 1.0},
         {"t_bright": 0.20, "t_ndsi": -0.20, "t_cirrus": 0.005},
+        shipped,
         {"t_bright": 0.16, "t_ndsi": -0.20, "t_cirrus": 0.005},
         {"t_bright": 0.14, "t_ndsi": -0.20, "t_cirrus": 0.004},
     ]
@@ -174,7 +198,7 @@ def sheet_thresholds(meta, tiles, out_path):
         )
 
     figure, axes = plt.subplots(
-        len(settings), len(tiles), figsize=(3.0 * len(tiles), 3.2 * len(settings)), dpi=150
+        len(settings), len(tiles), figsize=(3.0 * len(tiles), 3.2 * len(settings)), dpi=135
     )
     axes = np.atleast_2d(axes)
     for r, (detector, setting) in enumerate(zip(instances, settings)):
@@ -188,10 +212,10 @@ def sheet_thresholds(meta, tiles, out_path):
             if r == 0:
                 axis.set_title("tile %d,%d (%s)" % (row, col, note), fontsize=9)
             if c == 0:
-                axis.set_ylabel(
-                    "b>%.2f ndsi>%.2f\nB10>%.4f" % (setting["t_bright"], setting["t_ndsi"], setting["t_cirrus"]),
-                    fontsize=8,
-                )
+                label = "b>%.2f ndsi>%.2f\nB10>%.4f" % (setting["t_bright"], setting["t_ndsi"], setting["t_cirrus"])
+                if setting is shipped:
+                    label = "SHIPPED (config/thresholds.json)\n" + label
+                axis.set_ylabel(label, fontsize=8, fontweight="bold" if setting is shipped else "normal")
             axis.text(
                 4, 24, "%.1f %%" % (100.0 * mask.mean()),
                 color="white", fontsize=8,
@@ -210,7 +234,7 @@ def main(argv=None):
     parser.add_argument("--out-dir", default="output/comparison")
     parser.add_argument("--tiles", action="store_true", help="named tiles with each run's outline")
     parser.add_argument("--scene", action="store_true", help="whole scene overview from one run")
-    parser.add_argument("--thresholds", action="store_true", help="named tiles at four threshold sets")
+    parser.add_argument("--thresholds", action="store_true", help="named tiles at five threshold sets")
     parser.add_argument(
         "--tile", action="append", default=[], metavar="ROW,COL",
         help="add a tile to the sheet; repeatable",

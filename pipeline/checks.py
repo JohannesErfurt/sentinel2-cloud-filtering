@@ -193,8 +193,12 @@ def check_ck4(out_dir: str, meta=None) -> CheckResult:
     return CheckResult("CK4", True, "boxes match the grid to %.1e deg" % worst)
 
 
-def check_ck5(out_dir: str, meta=None) -> CheckResult:
-    """JPEGs: exactly the valid rows, correct size, world files, TCI fidelity."""
+def check_ck5(out_dir: str, meta=None, world_files: bool = True) -> CheckResult:
+    """JPEGs: exactly the valid rows, correct size, world files, TCI fidelity.
+
+    ``world_files=False`` is for the deliverable ZIP, which ships the JPEGs
+    without their ``.jgw``/``.prj``; pipeline runs always write and check them.
+    """
     import cv2
 
     from .export import read_prj_epsg, read_world_file
@@ -226,6 +230,8 @@ def check_ck5(out_dir: str, meta=None) -> CheckResult:
         if image is None or image.shape != (TILE_PX, TILE_PX, 3):
             shape = None if image is None else image.shape
             return CheckResult("CK5", False, "%s decodes to %s, expected (%d, %d, 3)" % (name, shape, TILE_PX, TILE_PX))
+        if not world_files:
+            continue
         world = os.path.join(tiles_dir, name[:-4] + ".jgw")
         if not os.path.isfile(world):
             return CheckResult("CK5", False, "%s has no world file" % name)
@@ -252,8 +258,9 @@ def check_ck5(out_dir: str, meta=None) -> CheckResult:
                 return CheckResult("CK5", False, "%s world file does not match the grid" % name)
 
     if meta is None:
+        what = "JPEGs and world files" if world_files else "JPEGs (world files not checked)"
         return CheckResult(
-            "CK5", True, "%d JPEGs and world files match the valid rows (no TCI comparison)" % len(found), skipped=True
+            "CK5", True, "%d %s match the valid rows (no TCI comparison)" % (len(found), what), skipped=True
         )
 
     from .io import read_tci
@@ -430,7 +437,9 @@ _CHECKS = {
 }
 
 
-def run_checks(out_dir: str, meta=None, ids: list[str] | None = None) -> list[CheckResult]:
+def run_checks(
+    out_dir: str, meta=None, ids: list[str] | None = None, world_files: bool = True
+) -> list[CheckResult]:
     """Run the named checks (default: everything except CK8) over an output folder."""
     results = []
     for check_id in ids or [c for c in ALL_CHECKS if c != "CK8"]:
@@ -438,7 +447,10 @@ def run_checks(out_dir: str, meta=None, ids: list[str] | None = None) -> list[Ch
         if function is None:
             continue
         try:
-            results.append(function(out_dir, meta))
+            if check_id == "CK5":
+                results.append(function(out_dir, meta, world_files=world_files))
+            else:
+                results.append(function(out_dir, meta))
         except CheckFailure as error:
             results.append(CheckResult(check_id, False, str(error)))
         except Exception as error:  # a check must never mask a real failure

@@ -75,6 +75,16 @@ def test_ck5_catches_a_missing_prj_file(synthetic_run):
     assert _ids(run_checks(str(synthetic_run), None, ["CK5"]))["CK5"].ok is False
 
 
+def test_ck5_without_world_files_accepts_jpegs_alone_but_still_counts_them(synthetic_run):
+    for sidecar in list((synthetic_run / "tiles").glob("*.jgw")) + list((synthetic_run / "tiles").glob("*.prj")):
+        os.remove(sidecar)
+    assert _ids(run_checks(str(synthetic_run), None, ["CK5"]))["CK5"].ok is False
+    assert _ids(run_checks(str(synthetic_run), None, ["CK5"], world_files=False))["CK5"].ok is True
+
+    os.remove(sorted((synthetic_run / "tiles").glob("*.jpg"))[0])
+    assert _ids(run_checks(str(synthetic_run), None, ["CK5"], world_files=False))["CK5"].ok is False
+
+
 def test_ck5_catches_a_prj_naming_the_wrong_crs(synthetic_run):
     from pipeline.export import write_prj_file
 

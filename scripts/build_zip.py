@@ -1,20 +1,18 @@
 """Assemble the single deliverable ZIP (S2, R10).
 
-    python scripts/build_zip.py --detector-run output/threshold --esa-run output/esa_new \
-        --s2cloudless-run output/s2cloudless --comparison-dir output/comparison \
-        --out dist/sentinel2-cloud-filtering.zip
+    python scripts/build_zip.py --detector-run output/threshold --out dist/sentinel2-cloud-filtering.zip
 
-Packs, at the archive root: the chosen detector's ``tiles/`` (JPEGs + world files),
-``report.csv``, ``tile_stats.csv``, ``cloud_mask.geojson``, ``run_summary.json``; a
-``comparison/`` folder with the other two detectors' ``report.csv`` files plus
-``comparison.md``, ``decision.md``, ``reference_notes.md``, the two sweep CSVs, the
-audit verdicts and the contact sheets; and the source tree needed to reproduce
-everything (``README.md``, ``pipeline/``, ``scripts/``, ``tests/``, ``config/``,
-``requirements.txt``). No ``.SAFE`` product, no scratch/working files.
+Packs, at the archive root: the chosen detector's ``tiles/`` (the JPEGs only),
+``report.csv``, ``cloud_mask.geojson`` and ``run_summary.json``; a ``comparison/``
+folder with three contact sheets; ``audit/verdicts.csv``, the visual-audit
+verdicts that decided which detector ships (the one input that cannot be
+regenerated from the code and the product); and the source tree needed to
+reproduce everything else (``README.md``, ``pipeline/``, ``scripts/``, ``tests/``,
+``config/``, ``requirements.txt``). No ``.SAFE`` product, no scratch/working files.
 
 The contact sheets are stored as JPEG (quality 85) rather than their original
-PNG: 2.1 MB instead of 14.1 MB, which is what keeps the archive under 25 MB
-without touching the delivered tiles themselves (quality 90, SPEC.md 1.6).
+PNG (a few MB each), which is what keeps the archive under 25 MB without
+touching the delivered tiles themselves (quality 90, SPEC.md 1.6).
 """
 import argparse
 import os
@@ -29,17 +27,8 @@ CONTACT_SHEET_JPEG_QUALITY = 85
 #: Source-tree directories copied wholesale, minus __pycache__ and other junk.
 SOURCE_DIRS = ["pipeline", "scripts", "tests", "config"]
 
-#: Files from output/comparison/ that belong in the deliverable's comparison/ folder.
-COMPARISON_FILES = [
-    "comparison.md",
-    "decision.md",
-    "reference_notes.md",
-    "threshold_sweep.csv",
-    "s2cloudless_sweep.csv",
-]
-
 #: Contact-sheet PNGs, written into comparison/ as JPEGs.
-CONTACT_SHEETS = ["tiles.png", "scene.png", "thresholds.png", "s2cloudless_candidates.png"]
+CONTACT_SHEETS = ["tiles.png", "scene.png", "thresholds.png"]
 
 #: Junk that must never end up inside the ZIP even if it's sitting in a source dir.
 SKIP_SUFFIXES = (".pyc",)
@@ -55,46 +44,31 @@ def _iter_source_files(root):
             yield os.path.join(dirpath, name)
 
 
-def build(detector_run, esa_run, s2cloudless_run, comparison_dir, audit_verdicts, out_path):
-    runs_by_detector = {}
-    for run_dir in (esa_run, s2cloudless_run):
-        summary_path = os.path.join(run_dir, "run_summary.json")
-        if not os.path.isfile(summary_path):
-            raise SystemExit("error: no run_summary.json in %s" % run_dir)
-        import json
-
-        with open(summary_path, encoding="utf8") as handle:
-            detector = json.load(handle)["detector"]
-        runs_by_detector[detector] = run_dir
-
+def build(detector_run, comparison_dir, audit_verdicts, out_path):
     os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
     if os.path.exists(out_path):
         os.remove(out_path)
 
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zf:
         # The chosen detector's own deliverables, at the archive root.
-        for name in ("report.csv", "tile_stats.csv", "cloud_mask.geojson", "run_summary.json"):
+        # tile_stats.csv stays out: for the shipped run it only repeats report.csv.
+        for name in ("report.csv", "cloud_mask.geojson", "run_summary.json"):
             src = os.path.join(detector_run, name)
             if not os.path.isfile(src):
                 raise SystemExit("error: missing %s in %s" % (name, detector_run))
             zf.write(src, name)
+        # JPEGs only: the .jgw/.prj world files the pipeline writes next to
+        # them are left out of the deliverable (placement on a map is not
+        # needed for RGB training data; the CSV already locates each tile).
         tiles_dir = os.path.join(detector_run, "tiles")
         for fname in sorted(os.listdir(tiles_dir)):
-            zf.write(os.path.join(tiles_dir, fname), "tiles/%s" % fname)
-
-        # The other two detectors' report.csv, for comparison.
-        for detector, run_dir in runs_by_detector.items():
-            zf.write(os.path.join(run_dir, "report.csv"), "comparison/%s_report.csv" % detector)
-
-        for name in COMPARISON_FILES:
-            src = os.path.join(comparison_dir, name)
-            if os.path.isfile(src):
-                zf.write(src, "comparison/%s" % name)
+            if fname.endswith(".jpg"):
+                zf.write(os.path.join(tiles_dir, fname), "tiles/%s" % fname)
 
         for name in CONTACT_SHEETS:
             src = os.path.join(comparison_dir, name)
             if not os.path.isfile(src):
-                continue
+                raise SystemExit("error: missing %s (run scripts/contact_sheet.py first)" % src)
             ok, buf = cv2.imencode(
                 ".jpg", cv2.imread(src), [cv2.IMWRITE_JPEG_QUALITY, CONTACT_SHEET_JPEG_QUALITY]
             )
@@ -102,9 +76,9 @@ def build(detector_run, esa_run, s2cloudless_run, comparison_dir, audit_verdicts
                 raise SystemExit("error: could not re-encode %s" % src)
             zf.writestr("comparison/%s.jpg" % os.path.splitext(name)[0], buf.tobytes(), zipfile.ZIP_STORED)
 
-        zf.write(audit_verdicts, "comparison/audit_verdicts.csv")
+        # Same path as in the repository, so the README's compare/decide commands work unzipped.
+        zf.write(audit_verdicts, "audit/verdicts.csv")
 
-        # Source tree needed to reproduce everything.
         zf.write("README.md", "README.md")
         zf.write("requirements.txt", "requirements.txt")
         for source_dir in SOURCE_DIRS:
@@ -123,21 +97,11 @@ def build(detector_run, esa_run, s2cloudless_run, comparison_dir, audit_verdicts
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--detector-run", required=True, help="the shipped detector's output folder")
-    parser.add_argument("--esa-run", required=True)
-    parser.add_argument("--s2cloudless-run", required=True)
     parser.add_argument("--comparison-dir", default="output/comparison")
     parser.add_argument("--audit-verdicts", default="audit/verdicts.csv")
     parser.add_argument("--out", default="dist/sentinel2-cloud-filtering.zip")
     args = parser.parse_args(argv)
-
-    return build(
-        args.detector_run,
-        args.esa_run,
-        args.s2cloudless_run,
-        args.comparison_dir,
-        args.audit_verdicts,
-        args.out,
-    )
+    return build(args.detector_run, args.comparison_dir, args.audit_verdicts, args.out)
 
 
 if __name__ == "__main__":

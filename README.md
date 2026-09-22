@@ -1,5 +1,7 @@
 # sentinel2-cloud-filtering
 
+Repository: https://github.com/JohannesErfurt/sentinel2-cloud-filtering
+
 Hi FlyPix AI team,
 
 Thank you for giving me this task. I have to admit that it took me more than the estimated five hours, as I got a little lost in exploring the topic of multispectral data. However, I found it really interesting and learned a lot in the process!
@@ -107,7 +109,9 @@ python -m pipeline.run --safe-dir <path> --detector s2cloudless  --out output/s2
 ```
 
 Each run writes `tiles/*.jpg` (+ `.jgw`/`.prj`), `report.csv`, `tile_stats.csv`, `cloud_mask.geojson`
-and `run_summary.json` into its `--out` folder.
+and `run_summary.json` into its `--out` folder. The deliverable ZIP leaves out the `.jgw`/`.prj`
+files and `tile_stats.csv` (for the shipped run it only repeats `report.csv`); check an unzipped
+copy with `--no-world-files`.
 
 Validate a run's structure and content:
 
@@ -115,13 +119,23 @@ Validate a run's structure and content:
 python scripts/check_deliverables.py --out output/threshold --safe-dir <path>
 ```
 
-Build the contact sheets used to inspect results without an interactive viewer:
+Build the contact sheets used to inspect results without an interactive viewer (each run needs
+`--save-tile-masks` for `--tiles` and `--scene`):
 
 ```bash
 python scripts/contact_sheet.py --safe-dir <path> --runs output/esa output/threshold output/s2cloudless --tiles
-python scripts/contact_sheet.py --safe-dir <path> --runs output/esa --scene
+python scripts/contact_sheet.py --safe-dir <path> --runs output/threshold --scene
 python scripts/contact_sheet.py --safe-dir <path> --thresholds
 ```
+
+They are written to `output/comparison/` as PNG. The ZIP carries the same three images as JPEG, in
+`comparison/`:
+
+| File in the ZIP | What it shows |
+|---|---|
+| `comparison/scene.jpg` | The whole scene with the shipped `threshold` mask in red (T_bright 0.18, T_ndsi −0.20, T_cirrus 0.005) and the 83 discarded tiles shaded — the tiles missing from `tiles/`. |
+| `comparison/tiles.jpg` | The four named tiles with all three detectors' mask outlines (ESA red, threshold cyan, s2cloudless yellow). |
+| `comparison/thresholds.jpg` | The four named tiles under five threshold settings for the `threshold` detector, with the shipped row (0.18) marked **SHIPPED**, plus each tile's cloud %. |
 
 Compare all three detectors and re-run the audit/decision:
 
@@ -152,6 +166,8 @@ resulting scene-wide cloud percentage:
 | **threshold (ships)** | **83** | **20.1517** |
 | s2cloudless | 161 | 27.7646 |
 | `brightness > 0.33` (naive, reference only) | 35 | 13.6 |
+
+`comparison/scene.jpg` shows where the shipped detector's 83 discarded tiles are.
 
 61 tiles sit between 25 % and 35 % cloud under ESA — close enough to the 30 % cut that small,
 defensible changes in method move them across it. That's the reason a single tile (12,19, below) is
@@ -221,6 +237,8 @@ silently.
 | 5,16 | heavy cloud | 82.2927 % | 74.7473 % | 79.7307 % |
 | 12,19 | thin cirrus veil (see below) | 16.2471 % | 29.7613 % | 51.0884 % |
 
+`comparison/tiles.jpg` shows these four tiles with all three detectors' outlines.
+
 ### The method
 
 **Brightness alone is not enough** — bright soil and snow both trip a brightness-only rule (this
@@ -267,10 +285,11 @@ come to about 2.5 GB, far too much for the ZIP.
 
 **Row-major CSV order, no identity columns.** `report.csv`'s 400 data rows are row-major in
 `(row, col)`: row *i* (0-indexed, after the header) is tile `(i // 20, i % 20)`. The CSV itself has no
-tile-id column — row order, the JPEG filenames (`tile_rRR_cCC.jpg`) and their `.jgw`/`.prj` sidecars
-are the only link between a CSV row and a place on the ground. A `.jgw` world file alone has no CRS
-information — GIS tools will happily misread its UTM-metre pixel size as degrees without the paired
-`.prj` file, which is why both are written together.
+tile-id column — row order and the JPEG filenames (`tile_rRR_cCC.jpg`) link a CSV row to its tile,
+and the CSV's lat/lon box says roughly where it is. For exact placement on a map, a pipeline run also
+writes a `.jgw` world file and a `.prj` beside each JPEG (a `.jgw` alone has no CRS, so GIS tools
+misread its UTM metres as degrees without the `.prj`). Those two are left out of the deliverable
+ZIP: RGB training data doesn't need map placement.
 
 **The 30 % rule.** `valid = (cloud_pct <= 30) AND (nodata_fraction <= 0.5)`, compared on the unrounded
 value — on the 10 m grid no tile is ever exactly 30.0000 %, so `<=` and `<` give identical results in
@@ -280,8 +299,8 @@ here — it exists for robustness on other products, not because this scene need
 
 ### The threshold choice (`config/thresholds.json`, Decision D1)
 
-Chosen by visual inspection on the four-tile contact sheet (`output/comparison/thresholds.png`), not
-by fitting to the ESA mask:
+Chosen by visual inspection on the four named tiles at several settings, not by fitting to the ESA
+mask. `comparison/thresholds.jpg` shows that comparison, with the shipped row marked **SHIPPED**:
 
 | Parameter | Chosen | ESA-agreement optimum (reference only) |
 |---|---|---|
@@ -413,7 +432,7 @@ single illustration in the whole project of why this task has no single right an
 ### Reproducing this from a fresh clone
 
 ```bash
-git clone <this repository>
+git clone https://github.com/JohannesErfurt/sentinel2-cloud-filtering.git
 cd sentinel2-cloud-filtering
 py -3.11 -m venv .venv
 .venv\Scripts\activate

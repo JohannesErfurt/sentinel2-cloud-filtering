@@ -1260,20 +1260,29 @@ The rule was fixed in §0.4, before any of this was measured. Apply it as writte
   - (manual) A fresh clone plus venv reproduces the outputs by following it verbatim.
 
 - [x] **S2 — The single deliverable ZIP** *(R10)* — `scripts/build_zip.py`; built to
-  `dist/sentinel2-cloud-filtering.zip` (24.6 MB). The limit was tightened from 50 MB to 25 MB on
-  request; the contact sheets are stored as JPEG (quality 85, 2.1 MB) instead of PNG (14.1 MB) to
-  get there, leaving the delivered tiles at their quality 90.
+  `dist/sentinel2-cloud-filtering.zip` (23.6 MB). The limit was tightened from 50 MB to 25 MB on
+  request; the contact sheets are stored as JPEG (quality 85) instead of PNG to get there, leaving
+  the delivered tiles at their quality 90. Everything the brief does not ask for and the code can
+  regenerate was then left out on request.
   **Done when:**
   - (auto) Exactly **one** ZIP exists, at most 25 MB, containing:
-    - `tiles/` — the chosen detector's valid JPEGs and their `.jgw` files *(verified: 951 files =
-      317 valid tiles x 3, matching `threshold`'s 83 invalid of 400)*
+    - `tiles/` — the chosen detector's valid JPEGs, without their `.jgw`/`.prj` files (left out on
+      request; pipeline runs still write them) *(verified: 317 JPEGs, matching `threshold`'s 83
+      invalid of 400)*
     - `report.csv` — the chosen detector's report, 400 rows, the six columns of §1.5
-    - `tile_stats.csv`, `cloud_mask.geojson`, `run_summary.json`
-    - `comparison/` — the other two detectors' `report.csv` files, `comparison.md`, `decision.md`,
-      `reference_notes.md`, the sweeps, the audit verdicts and the contact-sheet PNGs
+    - `cloud_mask.geojson`, `run_summary.json` (`tile_stats.csv` left out on request: for the
+      shipped `threshold` run it only repeats `report.csv` plus a tile id and an all-zero
+      `nodata_fraction`)
+    - `comparison/` — three contact sheets as JPEG: `scene` (from the shipped `threshold` run),
+      `tiles`, `thresholds` (with the shipped 0.18 row). Left out on request, all regenerable: the
+      other two detectors' `report.csv` files, `comparison.md`, `decision.md`,
+      `reference_notes.md`, both sweep CSVs and the `s2cloudless_candidates` sheet.
+    - `audit/verdicts.csv` — the visual-audit verdicts, at the repository's own path so the
+      README's compare/decide commands work from the unzipped copy; the one input that cannot be
+      regenerated
     - `README.md`, `pipeline/`, `scripts/`, `tests/`, `config/`, `requirements.txt`
-  - (auto) `python scripts/check_deliverables.py --out <unzipped copy>` passes the structural checks
-    in a temporary folder, with no `.SAFE` present. *(verified: unzipped to a temp folder, 6 passed,
+  - (auto) `python scripts/check_deliverables.py --out <unzipped copy> --no-world-files` passes the
+    structural checks in a temporary folder, with no `.SAFE` present. *(verified: unzipped to a temp folder, 6 passed,
     0 failed, 1 skipped (CK5's TCI comparison, which needs `--safe-dir`) — CK1-CK4, CK6, CK7 all pass
     with no `.SAFE` anywhere near the temp folder)*
   - (manual) A colleague, or you on a clean machine, follows the README from the unzipped copy alone
